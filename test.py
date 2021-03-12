@@ -10,17 +10,23 @@ IMPORTANT: hcitool and python is not allowed to access bluetooth stack unless th
 '''
 
 import magicswitchbot
+import time
 
 MAC1 = "34:14:b5:4a:28:0e"
 MAC2 = "34:14:B5:4A:2A:24"
-device = magicswitchbot.MagicSwitchbot(mac=MAC1, interface=1)
+
+# ha-nodo1:
+# device = magicswitchbot.MagicSwitchbot(mac=MAC1, interface=1)
+
+# alef-mint:
+device = magicswitchbot.MagicSwitchbot(mac=MAC1)
 # device = magicswitchbot.MagicSwitchbot(mac=MAC2)
 
-# device.turn_on()
-
-'''Let's send the "get token" command to test the API:'''
-device._sendCommand("0601", "", 3)
-
-'''time.sleep(5)
+device.turn_on()
+time.sleep(5)
 device.turn_off()
-'''
+time.sleep(5)
+device.toggle()
+time.sleep(5)
+device.toggle()
+

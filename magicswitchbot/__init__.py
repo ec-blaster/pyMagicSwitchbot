@@ -8,7 +8,7 @@ import random
 from bluepy import btle
 from Crypto.Cipher import AES
 
-DEFAULT_RETRY_COUNT = 3
+DEFAULT_RETRY_COUNT = 0
 DEFAULT_RETRY_TIMEOUT = 0.2
 NOTIFICATION_TIMEOUT = 5
 
@@ -38,60 +38,60 @@ class MagicSwitchbotDelegate (btle.DefaultDelegate):
         _LOGGER.info("Notification handler for MagicSwtichbot initialized")
       
     def resetData(self):
-      """Resets the received data through the characteristic
-      """
-      self._data = None
-      self._received = False
-      _LOGGER.info("Resetting received data")
+        """Resets the received data through the characteristic
+        """
+        self._data = None
+        self._received = False
+        _LOGGER.info("Resetting received data")
       
     def hasData(self) -> bool:
-      """Check if data received
+        """Check if data received
       
-      This method checks if we received any data after latest reset
+        This method checks if we received any data after latest reset
       
-      Returns
-      -------
-          bool
-              Returns True if there is data present
-      """
-      return self._received
+        Returns
+        -------
+            bool
+                Returns True if there is data present
+        """
+        return self._received
     
     def getData(self) -> str:
-      """Gets the received data
+        """Gets the received data
       
-      This method retrieves the data sent by the device to the client
-      in response to the latest command issued.
+        This method retrieves the data sent by the device to the client
+        in response to the latest command issued.
       
-      Returns
-      -------
-          str
-              Hexadecimal representation of the received data
-      """
-      return self._data.hex()
+        Returns
+        -------
+            str
+                Hexadecimal representation of the received data
+        """
+        return self._data.hex()
       
     def handleNotification(self, cHandle, data):
-      """Notifications handler
+        """Notifications handler
       
-      This method manages all notifications received from the MagicSwitchbot device
-      We must filter those notifications that we expect in a normal protocol life cycle
+        This method manages all notifications received from the MagicSwitchbot device
+        We must filter those notifications that we expect in a normal protocol life cycle
       
-      Parameters
-      ----------
-      cHandle : int
-          Handle to the characteristic that sends the notification data 
+        Parameters
+        ----------
+        cHandle : int
+            Handle to the characteristic that sends the notification data 
           
-      data : bytes
-          Data that the characteristic sends
-      """
-      if (cHandle == self._readHandle):
-          '''Filter our notified data'''
-          _LOGGER.debug("Received data from device: %s", data)
-          self._received = True
-          self._data = data
-      else:
-          '''Discard all other notifications'''
-          _LOGGER.debug("Received data from device at unexpected handle %d: %s", cHandle, data)
-          btle.DefaultDelegate.handleNotification(self, cHandle, data)
+        data : bytes
+            Data that the characteristic sends
+        """
+        if (cHandle == self._readHandle):
+            '''Filter our notified data'''
+            _LOGGER.debug("Received data from device: %s", data)
+            self._received = True
+            self._data = data
+        else:
+            '''Discard all other notifications'''
+            _LOGGER.debug("Received data from device at unexpected handle %d: %s", cHandle, data)
+            btle.DefaultDelegate.handleNotification(self, cHandle, data)
 
 
 class MagicSwitchbotDevice:
@@ -120,7 +120,18 @@ class MagicSwitchbotDevice:
     PAR_SWITCHTOGGLE = "02"
     PAR_OTA = "01"
     
-    def __init__(self, mac, retry_count=DEFAULT_RETRY_COUNT, password=None, interface=None) -> None:
+    """Protocol response return code definition"""
+    RC_SWITCH = "02"
+    RC_MODIFYPWD = "05"
+    RC_TIMEDSWITCH = "09"
+    RC_TOKENOK = "02"
+    RC_TOKENERR = "03"
+    
+    """Protocol response status definition"""
+    STA_OK = "00"
+    STA_ERR = "01"
+    
+    def __init__(self, mac, retry_count=DEFAULT_RETRY_COUNT, password="", interface=None) -> None:
         self._interface = interface
         self._mac = mac
         self._device = None
@@ -198,6 +209,7 @@ class MagicSwitchbotDevice:
         try:
             self._device.disconnect()
             _LOGGER.debug("Client disconnected")
+            self._token = None
         except btle.BTLEException:
             _LOGGER.warning("Error disconnecting from MagicSwitchbot.", exc_info=True)
         finally:
@@ -258,15 +270,20 @@ class MagicSwitchbotDevice:
         
         '''Hex form of the parameter length:'''
         parmLen = "{:02X}".format(int(len(parameter) / 2))
+        
+        if self._token is None:
+            tok = ""
+        else:
+            tok = self._token
 
         '''
         We calculate how long must be the random tail of the command.
         Each hex byte has a length of 2 characters, so the complete payload has 32 chars. The length byte also counts
         '''
-        rndLen = 32 - len(command) - len(parameter) - 2
+        rndLen = 32 - len(command) - len(parameter) - len(tok) - 2
         rndTail = ''.join([str(y) for _ in range(rndLen) for y in random.choice('0123456789abcdef')])
         
-        fullCommand = command + parmLen + parameter + rndTail  
+        fullCommand = command + parmLen + parameter + tok + rndTail  
 
         return self._encrypt(fullCommand)
 
@@ -298,76 +315,109 @@ class MagicSwitchbotDevice:
             
         return write_result
 
-    def _sendCommand(self, command, parameter, retry) -> bool:
-        send_success = False
-        encrypted_command = self._prepareCommand(command, parameter)
+    def _sendCommand(self, command, parameter, retry, last=True) -> bool:
         
-        _LOGGER.debug("Sending command to Magicswitchbot %s", encrypted_command)
-        try:
-            if self._device is None:
-              self._connect()
-              
-            send_success = self._writeData(encrypted_command)
-            if send_success:
-                ''' Wait for a response'''
-                _LOGGER.info("Waiting for notifications from the device...")
-                
-                while not self._delegate.hasData():
-                    if self._device.waitForNotifications(1.0):
-                        continue
-                    _LOGGER.warn("Waiting...")
-                _LOGGER.info("Finished waiting for data")
-                
-                encrypted_response = self._delegate.getData()
-                _LOGGER.info("Data received: %s", encrypted_response)
-                
-                plain_response = self._decrypt(encrypted_response)
-                _LOGGER.info("Unencrypted result: %s", plain_response)
-                self._processResponse(plain_response)
-        except btle.BTLEException as e:
-            _LOGGER.warning("MagicSwitchbot communication error: %s", str(e))
-        finally:
-            self._disconnect()
-            
-        if send_success:
-            return True
-        if retry < 1:
-            _LOGGER.error("MagicSwitchbot communication failed. We won't try again.", exc_info=True)
-            return False
+        '''First of all we check if there is no token retrieve'''
+        if command != self.CMD_GETTOKEN and self._token is None:
+            '''If the command is NOT GETTOKEN, we'll issue a GETOTKEN command before sending the actual command'''
+            go = self._sendCommand(self.CMD_GETTOKEN, self._password, retry, False)
         else:
-            _LOGGER.warning("Cannot send command to MagicSwitchbot. Retrying (remaining: %d)...\n\n", retry)
-
-        time.sleep(DEFAULT_RETRY_TIMEOUT)
-        return self._sendCommand(command, parameter, retry - 1)
+            go = True
+        
+        if go:
+            send_success = False
+            resp_success = False
+            encrypted_command = self._prepareCommand(command, parameter)
+            
+            _LOGGER.debug("Sending command to Magicswitchbot %s", encrypted_command)
+            try:
+                if self._device is None:
+                    self._connect()
+                  
+                send_success = self._writeData(encrypted_command)
+                if send_success:
+                    ''' Wait for a response'''
+                    
+                    _LOGGER.info("Waiting for notifications from the device...")
+                    
+                    while not self._delegate.hasData():
+                        if self._device.waitForNotifications(1.0):
+                            continue
+                        _LOGGER.warn("Waiting...")
+                    _LOGGER.info("Finished waiting for data")
+                    
+                    encrypted_response = self._delegate.getData()
+                    _LOGGER.info("Data received: %s", encrypted_response)
+                    
+                    plain_response = self._decrypt(encrypted_response)
+                    _LOGGER.info("Unencrypted result: %s", plain_response)
+                    resp_success = self._processResponse(plain_response)
+            except btle.BTLEException as e:
+                _LOGGER.warning("MagicSwitchbot communication error: %s", str(e))
+            finally:
+                if last:
+                    '''If it's the last command, we disconnect'''
+                    self._disconnect()
+                
+            if resp_success:
+                return True
+            if retry < 1:
+                _LOGGER.error("MagicSwitchbot communication failed. We won't try again.", exc_info=True)
+                return False
+            else:
+                _LOGGER.warning("Cannot send command to MagicSwitchbot. Retrying (remaining: %d)...\n\n", retry)
+    
+            time.sleep(DEFAULT_RETRY_TIMEOUT)
+            return self._sendCommand(command, parameter, retry - 1)
+        else:
+            return False
       
-    def _processResponse(self, response):
-      """Process the response from the device
+    def _processResponse(self, response) -> bool:
+        """Process the response from the device
       
-      This method processes the response that we receive from the device after
-      executing a command
+        This method processes the response that we receive from the device after
+        executing a command
       
-      Parameters
-      ----------
-          response : str
-              Hexadecimal representation of the 16 byte response
-      """
-      command = int(response[0:2])
-      status = int(response[2:4])
-      param_length = int(response[4:6])
-      param = response[6:(6 + 2 * param_length)]
+        Parameters
+        ----------
+            response : str
+                Hexadecimal representation of the 16 byte response
+                
+        Return
+        ------
+            bool
+                Returns True if the command result is succesfull
+        """
+        success = False
+        command = response[0:2]
+        ret_code = response[2:4]
+        param_length = int(response[4:6])
+        param = response[6:(6 + 2 * param_length)]
       
-      _LOGGER.debug("Command: %d, Status: %d, Length: %d, Param: %s", command, status, param_length, param)
+        _LOGGER.debug("Command: %s, Return Code: %s, Length: %d, Param: %s", command, ret_code, param_length, param)
       
-      if command == 6:
-          token = param[0:8]
-          chip_type = param[8:10]
-          ver_major = int(param[10:12])
-          ver_minor = int(param[12:14])
-          dev_type = param[14:16]
-          en_pwd = param[16:18]
-          self._token = token 
-          _LOGGER.info("The current connection token is %s", token)
-          _LOGGER.info("Chip type: %s, Firmware version: %d.%d, Device type: %s, Password enabled: %s", chip_type, ver_major, ver_minor, dev_type, en_pwd) 
+        if command == self.CMD_GETTOKEN[0:2]:
+            if ret_code == self.RC_TOKENOK:
+                token = param[0:8]
+                chip_type = param[8:10]
+                ver_major = int(param[10:12])
+                ver_minor = int(param[12:14])
+                dev_type = param[14:16]
+                en_pwd = param[16:18]
+                self._token = token 
+                _LOGGER.info("The current connection token is %s", token)
+                _LOGGER.info("Chip type: %s, Firmware version: %d.%d, Device type: %s, Password enabled: %s", chip_type, ver_major, ver_minor, dev_type, en_pwd)
+                success = True
+            else:
+                _LOGGER.error("Error retrieving token")
+        elif command == self.CMD_SWITCH[0:2]:
+            if ret_code == self.RC_SWITCH and param == self.STA_OK:
+                _LOGGER.info("Switch state changed successfully")
+                success = True
+            else:
+                _LOGGER.error("Error changing switch state")
+                
+        return success 
 
 
 class MagicSwitchbot(MagicSwitchbotDevice):
