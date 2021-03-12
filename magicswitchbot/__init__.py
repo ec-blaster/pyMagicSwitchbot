@@ -153,7 +153,7 @@ class MagicSwitchbotDevice:
             '''Once we connected, let's enable the response notifications'''
             self._enableNotifications()
             
-            # TODO: Get the token and store it
+            self._connected = True
         except btle.BTLEDisconnectError:
             _LOGGER.error("Device disconnected during connection attempt. You can try to reconnect.")
             self._device = None
@@ -295,10 +295,23 @@ class MagicSwitchbotDevice:
                           "Please check the device.\n")
         else:
             _LOGGER.info("Successfully sent command to MagicSwitchbot (MAC: %s): %s\n", self._mac, write_result)
-
-            _LOGGER.info("Waiting for notifications from the device...")
             
-            try:
+        return write_result
+
+    def _sendCommand(self, command, parameter, retry) -> bool:
+        send_success = False
+        encrypted_command = self._prepareCommand(command, parameter)
+        
+        _LOGGER.debug("Sending command to Magicswitchbot %s", encrypted_command)
+        try:
+            if self._device is None:
+              self._connect()
+              
+            send_success = self._writeData(encrypted_command)
+            if send_success:
+                ''' Wait for a response'''
+                _LOGGER.info("Waiting for notifications from the device...")
+                
                 while not self._delegate.hasData():
                     if self._device.waitForNotifications(1.0):
                         continue
@@ -310,21 +323,6 @@ class MagicSwitchbotDevice:
                 
                 plain_response = self._decrypt(encrypted_response)
                 _LOGGER.info("Unencrypted result: %s", plain_response)
-            except btle.BTLEDisconnectError:
-                _LOGGER.error("MagicSwitchbot device disconnected while waiting for notification")
-            except Exception as e:
-                _LOGGER.error("Unexpected error: ", str(e))
-
-        return write_result
-
-    def _sendCommand(self, command, parameter, retry) -> bool:
-        send_success = False
-        encrypted_command = self._prepareCommand(command, parameter)
-        
-        _LOGGER.debug("Sending command to Magicswitchbot %s", encrypted_command)
-        try:
-            self._connect()
-            send_success = self._writeData(encrypted_command)
         except btle.BTLEException as e:
             _LOGGER.warning("MagicSwitchbot communication error: %s", str(e))
         finally:
