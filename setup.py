@@ -1,7 +1,7 @@
 from setuptools import setup
 
 setup(
-    name='PyMagicSwitchbot',
+    name='pyMagicSwitchbot',
     packages=['magicswitchbot'],
     install_requires=['bluepy'],
     version='0.0.1',
