@@ -301,10 +301,10 @@ class MagicSwitchbotDevice:
                 _LOGGER.info("Finished waiting for data")
                 
                 encrypted_response = self._delegate.getData()
-                _LOGGER.info("Data received: {}", encrypted_response)
+                _LOGGER.info("Data received: %s", encrypted_response)
                 
                 plain_response = self._decrypt(encrypted_response)
-                _LOGGER.info("Unencrypted result: {}", plain_response)
+                _LOGGER.info("Unencrypted result: %s", plain_response)
             except btle.BTLEDisconnectError:
                 _LOGGER.error("MagicSwitchbot device disconnected while waiting for notification")
             except Exception as e:
