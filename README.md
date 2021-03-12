@@ -1,11 +1,11 @@
-# pyMagicSwitchBot
+# pyMagicSwitchbot
 
 
-This is a Python library that allows the integration of MagicSwitchBot devices in open source projects like home automation.
+This is a Python library that allows the integration of MagicSwitchbot devices in open source projects like home automation.
 
 ## Product description
 
-The [MagicSwitchBot device](https://www.interear.com/smart-products/magic-bluetooth-switchbot.html) is a clone of the SwitchBot manufactured by the chinese company *Shenzhen Interear Intelligent Technology Co., Ltd*.
+The [MagicSwitchbot device](https://www.interear.com/smart-products/magic-bluetooth-switchbot.html) is a clone of the Switchbot manufactured by the chinese company *Shenzhen Interear Intelligent Technology Co., Ltd*.
 
 <img src="img/render.jpg" alt="Rendered product image" style="zoom:50%;" />
 
