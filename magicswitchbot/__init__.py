@@ -35,14 +35,14 @@ class MagicSwitchbotDelegate (btle.DefaultDelegate):
         self._readHandle = readHandle
         self._data = None
         self._received = False
-        _LOGGER.info("Notification handler for MagicSwtichbot initialized")
+        _LOGGER.debug("Notification handler for MagicSwtichbot initialized")
       
     def resetData(self):
         """Resets the received data through the characteristic
         """
         self._data = None
         self._received = False
-        _LOGGER.info("Resetting received data")
+        _LOGGER.debug("Resetting received data")
       
     def hasData(self) -> bool:
         """Check if data received
@@ -143,6 +143,9 @@ class MagicSwitchbotDevice:
         self._password = password
         self._token = None
         self._delegate = None
+        
+    def __del__(self):
+        self._disconnect()
 
     def _connect(self) -> None:
         if self._device is not None:
@@ -152,7 +155,7 @@ class MagicSwitchbotDevice:
             self._device = btle.Peripheral(self._mac,
                                                   btle.ADDR_TYPE_PUBLIC,
                                                   self._interface)
-            _LOGGER.debug("Connected to MagicSwitchbot.\n")
+            _LOGGER.info("Connected to MagicSwitchbot at %s", self._mac)
             # time.sleep(0.5)
             
             '''Initialize service and characteristics handles to the device'''
@@ -195,7 +198,7 @@ class MagicSwitchbotDevice:
         try:
             res = self._cccdDescriptor.write(binascii.a2b_hex(self.CMD_ENNOTIF), withResponse=True)
             res = self._cccdDescriptor.read()
-            _LOGGER.info("Notifications enabled. Res: %s\n", res)
+            _LOGGER.debug("Notifications enabled")
             notifOk = True
         except btle.BTLEGattError as e:
             _LOGGER.error("Error enabling notifications: %s\n", str(e))
@@ -208,10 +211,10 @@ class MagicSwitchbotDevice:
         _LOGGER.debug("Disconnecting from MagicSwitchBot")
         try:
             self._device.disconnect()
-            _LOGGER.info("Client disconnected\n\n\n")
+            _LOGGER.info("Client disconnected from %s", self._mac)
             self._token = None
-        except btle.BTLEException:
-            _LOGGER.warning("Error disconnecting from MagicSwitchbot.", exc_info=True)
+        except btle.BTLEException as e:
+            _LOGGER.warning("Error disconnecting from MagicSwitchbot: %s", str(e))
         finally:
             self._device = None
             
@@ -309,9 +312,9 @@ class MagicSwitchbotDevice:
         
         if not write_result:
             _LOGGER.error("Sent command but didn't get a response from MagicSwitchbot confirming command was sent. "
-                          "Please check the device.\n")
+                          "Please check the device.")
         else:
-            _LOGGER.info("Successfully sent command to MagicSwitchbot (MAC: %s): %s\n", self._mac, write_result)
+            _LOGGER.info("Command sent to MagicSwitchbot (%s): %s", self._mac, data)
             
         return write_result
 
@@ -338,26 +341,25 @@ class MagicSwitchbotDevice:
                 if send_success:
                     ''' Wait for a response'''
                     
-                    _LOGGER.info("Waiting for notifications from the device...")
+                    _LOGGER.debug("Waiting for notifications from the device...")
                     
                     while not self._delegate.hasData():
                         if self._device.waitForNotifications(1.0):
                             continue
-                        _LOGGER.warn("Waiting...")
-                    _LOGGER.info("Finished waiting for data")
+                        _LOGGER.debug("Waiting...")
                     
                     encrypted_response = self._delegate.getData()
-                    _LOGGER.info("Data received: %s", encrypted_response)
+                    _LOGGER.debug("Raw data received:  %s", encrypted_response)
                     
                     plain_response = self._decrypt(encrypted_response)
-                    _LOGGER.info("Unencrypted result: %s", plain_response)
+                    _LOGGER.debug("Unencrypted result: %s", plain_response)
                     resp_success = self._processResponse(plain_response)
             except btle.BTLEException as e:
                 _LOGGER.warning("MagicSwitchbot communication error: %s", str(e))
-            finally:
-                if last:
-                    '''If it's the last command, we disconnect'''
-                    self._disconnect()
+#            finally:
+#                if last:
+#                    '''If it's the last command, we disconnect'''
+#                    self._disconnect()
                 
             if resp_success:
                 return True
@@ -394,7 +396,7 @@ class MagicSwitchbotDevice:
         param_length = int(response[4:6])
         param = response[6:(6 + 2 * param_length)]
       
-        _LOGGER.debug("Command: %s, Return Code: %s, Length: %d, Param: %s", command, ret_code, param_length, param)
+        _LOGGER.info("Response: [Command = %s, Return Code = %s, Length = %d, Params = %s]", command, ret_code, param_length, param)
       
         if command == self.CMD_GETTOKEN[0:2]:
             if ret_code == self.RC_TOKENOK:
