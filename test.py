@@ -22,7 +22,14 @@ MAC2 = "34:14:B5:4A:2A:24"
 device = magicswitchbot.MagicSwitchbot(mac=MAC1)
 # device = magicswitchbot.MagicSwitchbot(mac=MAC2)
 
-device.turn_on()
+device.toggle()
+time.sleep(5)
+device.toggle()
+time.sleep(5)
+device.toggle()
+
+
+'''device.turn_on()
 time.sleep(5)
 device.turn_off()
 time.sleep(5)
@@ -30,3 +37,4 @@ device.toggle()
 time.sleep(5)
 device.toggle()
 
+'''

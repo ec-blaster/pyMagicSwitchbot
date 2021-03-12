@@ -12,7 +12,7 @@ DEFAULT_RETRY_COUNT = 0
 DEFAULT_RETRY_TIMEOUT = 0.2
 NOTIFICATION_TIMEOUT = 5
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -153,7 +153,7 @@ class MagicSwitchbotDevice:
                                                   btle.ADDR_TYPE_PUBLIC,
                                                   self._interface)
             _LOGGER.debug("Connected to MagicSwitchbot.\n")
-            time.sleep(0.5)
+            # time.sleep(0.5)
             
             '''Initialize service and characteristics handles to the device'''
             self._service = self._device.getServiceByUUID(self.UUID_SERVICE)
@@ -208,7 +208,7 @@ class MagicSwitchbotDevice:
         _LOGGER.debug("Disconnecting from MagicSwitchBot")
         try:
             self._device.disconnect()
-            _LOGGER.debug("Client disconnected")
+            _LOGGER.info("Client disconnected\n\n\n")
             self._token = None
         except btle.BTLEException:
             _LOGGER.warning("Error disconnecting from MagicSwitchbot.", exc_info=True)
