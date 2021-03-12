@@ -351,10 +351,10 @@ class MagicSwitchbotDevice:
           response : str
               Hexadecimal representation of the 16 byte response
       """
-      command = int(response[0:1])
-      status = int(response[1:2])
-      param_length = int(response[2:3])
-      param = response[4:param_length]
+      command = int(response[0:2])
+      status = int(response[2:4])
+      param_length = int(response[4:6])
+      param = response[6:param_length]
       
       _LOGGER.debug("Command: %d, Status: %d, Length: %d, Param: %s", command, status, param_length, param)
 
