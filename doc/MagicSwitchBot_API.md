@@ -8,24 +8,28 @@ Some of the data present in this document is also based on my own research by sn
 
 The device uses BLE (Bluetooth Low Energy) to communicate with its own app which is available for Android and iOS.
 
+![UUID list](../img/uuids.jpg)
+
 It uses several UUID's for several purposes:
 
-* **Server**
-  This is the common entry for all characteristics.
-  * UUID: 0000fee7-0000-1000-8000-00805f9b34fb
-  * Handle: 0xFEE7
-* **ReadData**
-  This is used when the user needs to read the device response or status.
-  * UUID: 000036f6-0000-1000-8000-00805f9b34fb
-  * Handle: 0xFEC9
-* **WriteData**
-  This is used when the user wants to send any command to the device.
-  * UUID: 000036f5-0000-1000-8000-00805f9b34fb
-  * Handle: 0xFEC7
-* **CLIENT_CHARACTERISTIC_CONFIG**
-  This is a standard UUID for Descriptor Declaration.
-  * UUID: 00002902-0000-1000-8000-00805f9b34fb
-  * Handle: 0x2902
+* **Service**
+  This is the common service for all characteristics related to the custom protocol of command execution.
+  * Long UUID: 0000fee7-0000-1000-8000-00805f9b34fb
+  * Short UUID: 0xFEE7
+* **Characteristics**:
+  * **userWrite**
+    This characteristic is used to send commands to the device.
+    * Long UUID: 000036f5-0000-1000-8000-00805f9b34fb
+    * Short UUID: 0x36F5
+  * **userRead**
+    This characteristic is used for the device to answer to the commands sent by the client.
+    * Long UUID: 000036f6-0000-1000-8000-00805f9b34fb
+    * Short UUID: 0x36F6
+    * **Descriptors**:
+      * **CLIENT_CHARACTERISTIC_CONFIG**
+        This is a standard UUID that allows the parent characteristic of the device to send notifications to the client. When we write 0x0100 to it, it enables the notifications.
+        * Long UUID: 00002902-0000-1000-8000-00805f9b34fb
+        * Short UUID: 0x2902
 * **OAD_SERVICE_UUID**
   This is used to update the device's firmware, following the OAD (Over the Air Download) profile of BLE.
   * UUID: f000ffc0-0451-4000-b000-000000000000

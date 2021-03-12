@@ -42,7 +42,7 @@ class MagicSwitchbotDelegate (btle.DefaultDelegate):
       """
       self._data = None
       self._received = False
-      _LOGGER.debug("Resetting received data")
+      _LOGGER.info("Resetting received data")
       
     def hasData(self) -> bool:
       """Check if data received
@@ -85,12 +85,12 @@ class MagicSwitchbotDelegate (btle.DefaultDelegate):
       """
       if (cHandle == self._readHandle):
           '''Filter our notified data'''
-          _LOGGER.info("Received data from device: %s", data)
+          _LOGGER.debug("Received data from device: %s", data)
           self._received = True
           self._data = data
       else:
           '''Discard all other notifications'''
-          _LOGGER.info("Received data from device at unexpected handle %d: %s", cHandle, data)
+          _LOGGER.debug("Received data from device at unexpected handle %d: %s", cHandle, data)
           btle.DefaultDelegate.handleNotification(self, cHandle, data)
 
 
@@ -124,6 +124,10 @@ class MagicSwitchbotDevice:
         self._interface = interface
         self._mac = mac
         self._device = None
+        self._service = None
+        self._userReadChar = None
+        self._userWriteChar = None
+        self._cccdDescriptor = None
         self._retry_count = retry_count
         self._password = password
         self._token = None
@@ -139,7 +143,14 @@ class MagicSwitchbotDevice:
                                                   self._interface)
             _LOGGER.debug("Connected to MagicSwitchbot.\n")
             time.sleep(0.5)
+            
+            '''Initialize service and characteristics handles to the device'''
+            self._service = self._device.getServiceByUUID(self.UUID_SERVICE)
+            self._userReadChar = self._service.getCharacteristics(self.UUID_USERREAD_CHAR)[0]
+            self._cccdDescriptor = self._userReadChar.getDescriptors(forUUID=self.UUID_NOTIFY_SET)[0]
+            self._userWriteChar = self._service.getCharacteristics(self.UUID_USERWRITE_CHAR)[0]
 
+            '''Once we connected, let's enable the response notifications'''
             self._enableNotifications()
             
             # TODO: Get the token and store it
@@ -158,15 +169,12 @@ class MagicSwitchbotDevice:
         
         We establish how we receive the notifications from the device
         """
-        service = self._device.getServiceByUUID(self.UUID_SERVICE)
-        userReadChar = service.getCharacteristics(self.UUID_USERREAD_CHAR)[0]
-        readHandle = userReadChar.getHandle()
-        cccd = userReadChar.getDescriptors(forUUID=self.UUID_NOTIFY_SET)[0]
+        readHandle = self._userReadChar.getHandle()
 
         notifOk = False
 
         _LOGGER.debug("Enabling notifications for userRead characteristic (%s). Handle: 0x%X", self.UUID_USERREAD_CHAR, readHandle)
-        _LOGGER.debug("Client Characteristic Configuration Descriptor: %s. Handle: 0x%X", self.UUID_NOTIFY_SET, cccd.handle)
+        _LOGGER.debug("Client Characteristic Configuration Descriptor: %s. Handle: 0x%X", self.UUID_NOTIFY_SET, self._cccdDescriptor.handle)
 
         '''Subscribe to userRed characteristic notifications'''
         self._delegate = MagicSwitchbotDelegate(readHandle)
@@ -174,8 +182,8 @@ class MagicSwitchbotDevice:
 
         '''Enable the notifications for the read characteristic'''
         try:
-            res = cccd.write(binascii.a2b_hex(self.CMD_ENNOTIF), withResponse=True)
-            res = cccd.read()
+            res = self._cccdDescriptor.write(binascii.a2b_hex(self.CMD_ENNOTIF), withResponse=True)
+            res = self._cccdDescriptor.read()
             _LOGGER.info("Notifications enabled. Res: %s\n", res)
             notifOk = True
         except btle.BTLEGattError as e:
@@ -278,12 +286,9 @@ class MagicSwitchbotDevice:
                 Returns True if the data is sent succesfully
         """
       
-        service = self._device.getServiceByUUID(self.UUID_SERVICE)
-        userWriteChar = service.getCharacteristics(self.UUID_USERWRITE_CHAR)[0]
-        
         self._delegate.resetData()
         _LOGGER.debug("Sending data, %s", data)
-        write_result = userWriteChar.write(binascii.a2b_hex(data), True)
+        write_result = self._userWriteChar.write(binascii.a2b_hex(data), True)
         
         if not write_result:
             _LOGGER.error("Sent command but didn't get a response from MagicSwitchbot confirming command was sent. "
