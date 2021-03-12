@@ -323,6 +323,7 @@ class MagicSwitchbotDevice:
                 
                 plain_response = self._decrypt(encrypted_response)
                 _LOGGER.info("Unencrypted result: %s", plain_response)
+                self._processResponse(plain_response)
         except btle.BTLEException as e:
             _LOGGER.warning("MagicSwitchbot communication error: %s", str(e))
         finally:
@@ -338,6 +339,24 @@ class MagicSwitchbotDevice:
 
         time.sleep(DEFAULT_RETRY_TIMEOUT)
         return self._sendCommand(command, parameter, retry - 1)
+      
+    def _processResponse(self, response):
+      """Process the response from the device
+      
+      This method processes the response that we receive from the device after
+      executing a command
+      
+      Parameters
+      ----------
+          response : str
+              Hexadecimal representation of the 16 byte response
+      """
+      command = int(response[0:1])
+      status = int(response[1:2])
+      param_length = int(response[2:3])
+      param = response[4:param_length]
+      
+      _LOGGER.debug("Command: %d, Status: %d, Length: %d, Param: %s", command, status, param_length, param)
 
 
 class MagicSwitchbot(MagicSwitchbotDevice):
