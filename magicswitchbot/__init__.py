@@ -227,7 +227,7 @@ class MagicSwitchbotDevice:
         """
         
         '''We need a byte string as the key to decrypt or encrypt'''
-        decipher = AES.new(bytes(bytearray(self.CRYPT_KEY)))
+        decipher = AES.new(bytes(bytearray(self.CRYPT_KEY)), AES.MODE_ECB)
         return decipher.decrypt(bytes.fromhex(data)).hex()
 
     def _prepareCommand(self, command, parameter):
