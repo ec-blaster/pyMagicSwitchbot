@@ -354,7 +354,7 @@ class MagicSwitchbotDevice:
       command = int(response[0:2])
       status = int(response[2:4])
       param_length = int(response[4:6])
-      param = response[6:param_length]
+      param = response[6:(6 + 2 * param_length)]
       
       _LOGGER.debug("Command: %d, Status: %d, Length: %d, Param: %s", command, status, param_length, param)
 
