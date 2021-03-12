@@ -5,7 +5,7 @@ import time
 import binascii
 import logging
 import random
-import bluepy
+from bluepy import btle
 from Crypto.Cipher import AES
 
 DEFAULT_RETRY_COUNT = 3
@@ -16,34 +16,82 @@ logging.basicConfig(level=logging.DEBUG)
 _LOGGER = logging.getLogger(__name__)
 
 
-class MagicSwitchbotDelegate (bluepy.btle.DefaultDelegate):
+class MagicSwitchbotDelegate (btle.DefaultDelegate):
+    """MagicSwitchbotDelegate
+    
+    Bluetooth notifications subscription to handle responses from the MagicSwitchbot device
+    """
 
     def __init__(self, readHandle):
-      bluepy.btle.DefaultDelegate.__init__(self)
-      self._readHandle = readHandle
-      self._readData = None
-      self._dataReceived = False
-      _LOGGER.info("Notification handler for MagicSwtichbot initialized")
+        """Class constructor
+        
+        This constructor must receive the handle of the characteristic we want to subscribe to.
+        Parameters
+        ----------
+        readHandle : int
+            Handle to the bluetooth characteristic we want to subscribe
+        """
+        btle.DefaultDelegate.__init__(self)
+        self._readHandle = readHandle
+        self._data = None
+        self._received = False
+        _LOGGER.info("Notification handler for MagicSwtichbot initialized")
       
     def resetData(self):
-      self._readData = None
-      self._dataReceived = False
-      _LOGGER.debug("Data retrieval resetted")
+      """Resets the received data through the characteristic
+      """
+      self._data = None
+      self._received = False
+      _LOGGER.debug("Resetting received data")
+      
+    def hasData(self) -> bool:
+      """Check if data received
+      
+      This method checks if we received any data after latest reset
+      
+      Returns
+      -------
+          bool
+              Returns True if there is data present
+      """
+      return self._received
+    
+    def getData(self) -> str:
+      """Gets the received data
+      
+      This method retrieves the data sent by the device to the client
+      in response to the latest command issued.
+      
+      Returns
+      -------
+          str
+              Hexadecimal representation of the received data
+      """
+      return self._data.hex()
       
     def handleNotification(self, cHandle, data):
-      '''
+      """Notifications handler
+      
       This method manages all notifications received from the MagicSwitchbot device
       We must filter those notifications that we expect in a normal protocol life cycle
-      '''
+      
+      Parameters
+      ----------
+      cHandle : int
+          Handle to the characteristic that sends the notification data 
+          
+      data : bytes
+          Data that the characteristic sends
+      """
       if (cHandle == self._readHandle):
           '''Filter our notified data'''
           _LOGGER.info("Received data from device: %s", data)
-          self._dataReceived = True
-          self._readData = data
+          self._received = True
+          self._data = data
       else:
           '''Discard all other notifications'''
           _LOGGER.info("Received data from device at unexpected handle %d: %s", cHandle, data)
-          bluepy.btle.DefaultDelegate.handleNotification(self, cHandle, data)
+          btle.DefaultDelegate.handleNotification(self, cHandle, data)
 
 
 class MagicSwitchbotDevice:
@@ -86,8 +134,8 @@ class MagicSwitchbotDevice:
             return
         try:
             _LOGGER.debug("Connecting to MagicSwitchbot at address %s...", self._mac)
-            self._device = bluepy.btle.Peripheral(self._mac,
-                                                  bluepy.btle.ADDR_TYPE_PUBLIC,
+            self._device = btle.Peripheral(self._mac,
+                                                  btle.ADDR_TYPE_PUBLIC,
                                                   self._interface)
             _LOGGER.debug("Connected to MagicSwitchbot.\n")
             time.sleep(0.5)
@@ -95,18 +143,21 @@ class MagicSwitchbotDevice:
             self._enableNotifications()
             
             # TODO: Get the token and store it
-        except bluepy.btle.BTLEDisconnectError:
+        except btle.BTLEDisconnectError:
             _LOGGER.error("Device disconnected during connection attempt. You can try to reconnect.")
             self._device = None
             raise
             
-        except bluepy.btle.BTLEException:
+        except btle.BTLEException:
             _LOGGER.error("Failed to connect to MagicSwitchbot.", exc_info=True)
             self._device = None
             raise
 
     def _enableNotifications(self) -> bool:
-        '''We establish how we receive the notifications from the device'''
+        """Enable read notifications
+        
+        We establish how we receive the notifications from the device
+        """
         service = self._device.getServiceByUUID(self.UUID_SERVICE)
         userReadChar = service.getCharacteristics(self.UUID_USERREAD_CHAR)[0]
         readHandle = userReadChar.getHandle()
@@ -127,7 +178,7 @@ class MagicSwitchbotDevice:
             res = cccd.read()
             _LOGGER.info("Notifications enabled. Res: %s\n", res)
             notifOk = True
-        except bluepy.btle.BTLEGattError as e:
+        except btle.BTLEGattError as e:
             _LOGGER.error("Error enabling notifications: %s\n", str(e))
 
         return notifOk
@@ -139,19 +190,23 @@ class MagicSwitchbotDevice:
         try:
             self._device.disconnect()
             _LOGGER.debug("Client disconnected")
-        except bluepy.btle.BTLEException:
+        except btle.BTLEException:
             _LOGGER.warning("Error disconnecting from MagicSwitchbot.", exc_info=True)
         finally:
             self._device = None
             
     def _encrypt(self, data) -> str:
-        '''
-        Encrypts data using AES128 ECB
-        Parameters:
-          data (str): Hexadecimal representation of the data to encrypt
-        Returns:
-          str: Hexadecimal representation of encrypted data
-        '''
+        """Encrypts data using AES128 ECB
+        Parameters
+        ----------
+            data : str
+                Hexadecimal representation of the data to encrypt
+
+        Returns
+        -------
+            str
+                Hexadecimal representation of encrypted data
+        """
         _LOGGER.debug("Unencrypted command: %s", data)
         cipher = AES.new(bytes(bytearray(self.CRYPT_KEY)), AES.MODE_ECB)
         encrypted = cipher.encrypt(bytes.fromhex(data)).hex()
@@ -159,27 +214,39 @@ class MagicSwitchbotDevice:
         return encrypted
       
     def _decrypt(self, data) -> str:
-        '''
-        Decrypts data using AES128 ECB
-        Parameters:
-          data (str): Hexadecimal representation of the data to decrypt
-        Returns:
-          str: Hexadecimal representation of decrypted data
-        '''
+        """Decrypts data using AES128 ECB
+        Parameters
+        ----------
+            data : str
+                Hexadecimal representation of the data to decrypt
+
+        Returns
+        -------
+            str
+                Hexadecimal representation of decrypted data
+        """
         
         '''We need a byte string as the key to decrypt or encrypt'''
         decipher = AES.new(bytes(bytearray(self.CRYPT_KEY)))
         return decipher.decrypt(bytes.fromhex(data)).hex()
 
     def _prepareCommand(self, command, parameter):
-        '''
-        Prepare an encrypted string based on a command and a parameter to send to the MagicSwitchBot device
-        Parameters:
-            command(str): Hexadecimal representation of the command to send (usually 2 hex bytes, len 4)
-            parameter(str): Hexadecimal representation of the parameter(s) to send (variable length)
-        Returns:
-            str - Hexadecimal representation of the 16 encrypted bytes to send to the device
-        '''
+        """Prepare the command to send to the device
+        
+        Prepares an encrypted string based on a command and a parameter to send to the MagicSwitchBot device
+        
+        Parameters
+        ----------
+            command : str
+                Hexadecimal representation of the command to send (usually 2 hex bytes, len 4)
+            parameter: str
+                Hexadecimal representation of the parameter(s) to send (variable length)
+
+        Returns
+        -------
+            str
+                Hexadecimal representation of the 16 encrypted bytes to send to the device
+        """
         
         '''Hex form of the parameter length:'''
         parmLen = "{:02X}".format(int(len(parameter) / 2))
@@ -196,20 +263,26 @@ class MagicSwitchbotDevice:
         return self._encrypt(fullCommand)
 
     def _writeData(self, data) -> bool:
-        '''
-        This method writes data to the device via BLE
-        '''
-      
-        # self._delegate.resetData()
+        """Write data to the device
         
-        _LOGGER.debug("Prepare to send")
+        This method writes data to the device via BLE, using the "userWrite" characteristic
+        
+        Parameters
+        ----------
+            data: str
+                Hexadecimal string with 16 encryopted bytes of data to write
+
+        Returns
+        -------
+            bool
+                Returns True if the data is sent succesfully
+        """
+      
         service = self._device.getServiceByUUID(self.UUID_SERVICE)
         userWriteChar = service.getCharacteristics(self.UUID_USERWRITE_CHAR)[0]
         
+        self._delegate.resetData()
         _LOGGER.debug("Sending data, %s", data)
-
-        # write_result = self._device.writeCharacteristic(0x25, binascii.a2b_hex(data), True)
-
         write_result = userWriteChar.write(binascii.a2b_hex(data), True)
         
         if not write_result:
@@ -221,15 +294,21 @@ class MagicSwitchbotDevice:
             _LOGGER.info("Waiting for notifications from the device...")
             
             try:
-                while True:
+                while not self._delegate.hasData():
                     if self._device.waitForNotifications(1.0):
                         continue
-                    _LOGGER.warn("Still waiting...")
-                _LOGGER.info("Finish notification loop")
-            except bluepy.btle.BTLEDisconnectError:
+                    _LOGGER.warn("Waiting...")
+                _LOGGER.info("Finished waiting for data")
+                
+                encrypted_response = self._delegate.getData()
+                _LOGGER.info("Data received: {}", encrypted_response)
+                
+                plain_response = self._decrypt(encrypted_response)
+                _LOGGER.info("Unencrypted result: {}", plain_response)
+            except btle.BTLEDisconnectError:
                 _LOGGER.error("MagicSwitchbot device disconnected while waiting for notification")
             except Exception as e:
-                _LOGGER.error("Excepción no controlada: ", str(e))
+                _LOGGER.error("Unexpected error: ", str(e))
 
         return write_result
 
@@ -241,7 +320,7 @@ class MagicSwitchbotDevice:
         try:
             self._connect()
             send_success = self._writeData(encrypted_command)
-        except bluepy.btle.BTLEException as e:
+        except btle.BTLEException as e:
             _LOGGER.warning("MagicSwitchbot communication error: %s", str(e))
         finally:
             self._disconnect()
@@ -259,7 +338,7 @@ class MagicSwitchbotDevice:
 
 
 class MagicSwitchbot(MagicSwitchbotDevice):
-    """Representation of a Switchbot."""
+    """Representation of a MagicSwitchbot."""
     
     def turn_on(self) -> bool:
         """Turn device on."""

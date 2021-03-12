@@ -14,7 +14,7 @@ setup(
         'Environment :: Other Environment',
         'Intended Audience :: Developers',
         'Operating System :: Linux',
-        'Programming Language :: Python :: 3',
+        'Programming Language :: Python :: 3.5',
         'Topic :: Home Automation',
         'Topic :: Software Development :: Libraries :: Python Modules'
       ],
