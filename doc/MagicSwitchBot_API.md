@@ -314,7 +314,7 @@ def decrypt (data):
   
   '''We need a byte string as the key to decrypt or encrypt'''
   key = bytes(bytearray(KEY))
-  decipher = AES.new(key)
+  decipher = AES.new(key, AES.MODE_ECB)
   return decipher.decrypt(data)
 
 
