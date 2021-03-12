@@ -357,6 +357,17 @@ class MagicSwitchbotDevice:
       param = response[6:(6 + 2 * param_length)]
       
       _LOGGER.debug("Command: %d, Status: %d, Length: %d, Param: %s", command, status, param_length, param)
+      
+      if command == 6:
+          token = param[0:8]
+          chip_type = param[8:10]
+          ver_major = int(param[10:12])
+          ver_minor = int(param[12:14])
+          dev_type = param[14:16]
+          en_pwd = param[16:18]
+          self._token = token 
+          _LOGGER.info("The current connection token is %s", token)
+          _LOGGER.info("Chip type: %s, Firmware version: %d.%d, Device type: %s, Password enabled: %s", chip_type, ver_major, ver_minor, dev_type, en_pwd) 
 
 
 class MagicSwitchbot(MagicSwitchbotDevice):
