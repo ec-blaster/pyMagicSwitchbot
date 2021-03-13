@@ -7,10 +7,12 @@ import logging
 import random
 from bluepy import btle
 from Crypto.Cipher import AES
+from threading import Timer
 
 DEFAULT_RETRY_COUNT = 0
 DEFAULT_RETRY_TIMEOUT = 0.2
 NOTIFICATION_TIMEOUT = 5
+DISCONNECT_TIMEOUT = 10
 
 logging.basicConfig(level=logging.INFO)
 _LOGGER = logging.getLogger(__name__)
@@ -170,7 +172,8 @@ class MagicSwitchbotDevice:
             '''Once we connected, let's enable the response notifications'''
             self._enableNotifications()
             
-            self._connected = True
+            '''We stablish a timer to disconnect after some time'''
+            Timer(DISCONNECT_TIMEOUT, self._auto_disconnect).start()
         except btle.BTLEDisconnectError:
             _LOGGER.error("Device disconnected during connection attempt. You can try to reconnect.")
             self._device = None
@@ -220,6 +223,10 @@ class MagicSwitchbotDevice:
             _LOGGER.warning("Error disconnecting from MagicSwitchbot: %s", str(e))
         finally:
             self._device = None
+            
+    def _auto_disconnect(self):
+        if self._device is not None:
+            self._disconnect()
             
     def _encrypt(self, data) -> str:
         """Encrypts data using AES128 ECB
