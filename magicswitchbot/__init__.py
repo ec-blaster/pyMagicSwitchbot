@@ -108,6 +108,7 @@ class MagicSwitchbotDevice:
     
     """Protocol commands definition"""
     CMD_ENNOTIF = "0100"
+    CMD_GETBAT = "0201"
     CMD_OTA = "0301"
     CMD_SWITCH = "0501"
     CMD_MODIFYPWD = "0504"
@@ -121,6 +122,7 @@ class MagicSwitchbotDevice:
     PAR_OTA = "01"
     
     """Protocol response return code definition"""
+    RC_GETBAT = "02"
     RC_SWITCH = "02"
     RC_MODIFYPWD = "05"
     RC_TIMEDSWITCH = "09"
@@ -142,6 +144,7 @@ class MagicSwitchbotDevice:
         self._retry_count = retry_count
         self._password = password
         self._token = None
+        self._battery = None
         self._delegate = None
         
     def __del__(self):
@@ -408,6 +411,13 @@ class MagicSwitchbotDevice:
                 success = True
             else:
                 _LOGGER.error("Error retrieving token")
+        elif command == self.CMD_GETBAT[0:2]:
+            if ret_code == self.RC_GETBAT and param.upper() != "FF":
+                self._battery = int("0x" + param, 16)
+                _LOGGER.info("Battery level retrieved: %d", self._battery)
+                success = True
+            else:
+                self._battery = None
         elif command == self.CMD_SWITCH[0:2]:
             if ret_code == self.RC_SWITCH and param == self.STA_OK:
                 _LOGGER.info("Switch state changed successfully")
@@ -428,6 +438,18 @@ class MagicSwitchbot(MagicSwitchbotDevice):
     def turn_off(self) -> bool:
         """Turn device off."""
         return self._sendCommand(self.CMD_SWITCH, self.PAR_SWITCHOFF, self._retry_count)
+      
+    def get_battery(self) -> int:
+        """Gets the device's battery level
+        Return
+            int
+                Level of the device's battery, from 0 to 100
+        """
+        ok = self._sendCommand(self.CMD_GETBAT, "01", self._retry_count)
+        if ok:
+            return self._battery
+        else:
+            return None 
       
     def push(self) -> bool:
         """Just push."""
