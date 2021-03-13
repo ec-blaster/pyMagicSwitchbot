@@ -117,7 +117,7 @@ class MagicSwitchbotDevice:
     """Protocol parameters definition"""
     PAR_SWITCHON = "01"
     PAR_SWITCHOFF = "00"
-    PAR_SWITCHTOGGLE = "02"
+    PAR_SWITCHPUSH = "02"
     PAR_OTA = "01"
     
     """Protocol response return code definition"""
@@ -318,12 +318,12 @@ class MagicSwitchbotDevice:
             
         return write_result
 
-    def _sendCommand(self, command, parameter, retry, last=True) -> bool:
+    def _sendCommand(self, command, parameter, retry) -> bool:
         
         '''First of all we check if there is no token retrieve'''
         if command != self.CMD_GETTOKEN and self._token is None:
             '''If the command is NOT GETTOKEN, we'll issue a GETOTKEN command before sending the actual command'''
-            go = self._sendCommand(self.CMD_GETTOKEN, self._password, retry, False)
+            go = self._sendCommand(self.CMD_GETTOKEN, self._password, retry)
         else:
             go = True
         
@@ -356,10 +356,6 @@ class MagicSwitchbotDevice:
                     resp_success = self._processResponse(plain_response)
             except btle.BTLEException as e:
                 _LOGGER.warning("MagicSwitchbot communication error: %s", str(e))
-#            finally:
-#                if last:
-#                    '''If it's the last command, we disconnect'''
-#                    self._disconnect()
                 
             if resp_success:
                 return True
@@ -433,6 +429,6 @@ class MagicSwitchbot(MagicSwitchbotDevice):
         """Turn device off."""
         return self._sendCommand(self.CMD_SWITCH, self.PAR_SWITCHOFF, self._retry_count)
       
-    def toggle(self) -> bool:
-        """Toggle device state."""
-        return self._sendCommand(self.CMD_SWITCH, self.PAR_SWITCHTOGGLE, self._retry_count)
+    def push(self) -> bool:
+        """Just push."""
+        return self._sendCommand(self.CMD_SWITCH, self.PAR_SWITCHPUSH, self._retry_count)
