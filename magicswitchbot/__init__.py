@@ -135,7 +135,7 @@ class MagicSwitchbotDevice:
     STA_OK = "00"
     STA_ERR = "01"
     
-    def __init__(self, mac, retry_count=DEFAULT_RETRY_COUNT, password="", interface=None) -> None:
+    def __init__(self, mac, retry_count=DEFAULT_RETRY_COUNT, password=None, interface=None) -> None:
         self._interface = interface
         self._mac = mac
         self._device = None
@@ -333,7 +333,7 @@ class MagicSwitchbotDevice:
         '''First of all we check if there is no token retrieve'''
         if command != self.CMD_GETTOKEN and self._token is None:
             '''If the command is NOT GETTOKEN, we'll issue a GETOTKEN command before sending the actual command'''
-            go = self._sendCommand(self.CMD_GETTOKEN, self._password, retry)
+            go = self._sendCommand(self.CMD_GETTOKEN, "" if self._password is None else self._password, retry)
         else:
             go = True
         
@@ -373,7 +373,7 @@ class MagicSwitchbotDevice:
                 _LOGGER.error("MagicSwitchbot communication failed. We won't try again.", exc_info=True)
                 return False
             else:
-                _LOGGER.warning("Cannot send command to MagicSwitchbot. Retrying (remaining: %d)...\n\n", retry)
+                _LOGGER.warning("Cannot send command to MagicSwitchbot. Retrying (remaining attempts: %d)...", retry)
     
             time.sleep(DEFAULT_RETRY_TIMEOUT)
             return self._sendCommand(command, parameter, retry - 1)
