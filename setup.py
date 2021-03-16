@@ -21,7 +21,7 @@ setup(
         'Development Status :: 3 - Alpha',
         'Environment :: Other Environment',
         'Intended Audience :: Developers',
-        'Operating System :: Linux',
+        'Operating System :: POSIX :: Linux',
         'Programming Language :: Python :: 3.5',
         'Topic :: Home Automation',
         'Topic :: Software Development :: Libraries :: Python Modules'
