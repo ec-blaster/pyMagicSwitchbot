@@ -14,32 +14,35 @@ It uses several UUID's for several purposes:
 
 * **Service**
   This is the common service for all characteristics related to the custom protocol of command execution.
-  * Long UUID: 0000fee7-0000-1000-8000-00805f9b34fb
-  * Short UUID: 0xFEE7
+  * Long UUID: `0000fee7-0000-1000-8000-00805f9b34fb`
+  * Short UUID: `0xFEE7`
 * **Characteristics**:
   * **userWrite**
     This characteristic is used to send commands to the device.
-    * Long UUID: 000036f5-0000-1000-8000-00805f9b34fb
-    * Short UUID: 0x36F5
+    * Long UUID: `000036f5-0000-1000-8000-00805f9b34fb`
+    * Short UUID: `0x36F5`
   * **userRead**
     This characteristic is used for the device to answer to the commands sent by the client.
-    * Long UUID: 000036f6-0000-1000-8000-00805f9b34fb
-    * Short UUID: 0x36F6
+    * Long UUID: `000036f6-0000-1000-8000-00805f9b34fb`
+    * Short UUID: `0x36F6`
     * **Descriptors**:
       * **CLIENT_CHARACTERISTIC_CONFIG**
-        This is a standard UUID that allows the parent characteristic of the device to send notifications to the client. When we write 0x0100 to it, it enables the notifications.
-        * Long UUID: 00002902-0000-1000-8000-00805f9b34fb
-        * Short UUID: 0x2902
+        This is a standard UUID that allows the parent characteristic to send notifications to the client. When we write a value of `0x0100` to this descriptor, we are enabling the notifications for its characteristic.
+        * Long UUID: `00002902-0000-1000-8000-00805f9b34fb`
+        * Short UUID: `0x2902`
+
+Some other UUID's that the App uses are:
+
 * **OAD_SERVICE_UUID**
   This is used to update the device's firmware, following the OAD (Over the Air Download) profile of BLE.
-  * UUID: f000ffc0-0451-4000-b000-000000000000
+  * UUID: `f000ffc0-0451-4000-b000-000000000000`
 * **CC_SERVICE_UUID**
   Standard UUID for Connection Control.
-  * UUID: f000ccc0-0451-4000-b000-000000000000
+  * UUID: `f000ccc0-0451-4000-b000-000000000000`
 
 ## 2. Broadcast Data
 
-The device uses BLE advertisement to communicate its main parameters to the world. Aparently it sends advertisement packets every 3 seconds.
+The device uses BLE *advertisement* to communicate its main parameters to the world. Apparently it sends advertisement packets every 3 seconds.
 
 The `GAP Advertisement Data Type` used is **GAP_ADTYPE_MANUFACTURER**, and the advertisement payload is a packet of **12 bytes** with the following content:
 
@@ -48,12 +51,12 @@ The `GAP Advertisement Data Type` used is **GAP_ADTYPE_MANUFACTURER**, and the a
 | Identifier        | 0205    | 2      | The first and second bytes of the packet is always 0x02 0x05, which identifies the manufacturer of MagicSwitchBot and may be used to filter just this type of device. |
 | Bluetooth Address | MAC     | 6      | The bluetooth MAC  address of this specific device.          |
 | Power             | POWER   | 1      | Battery level (1 byte, values from 0 to 100).                |
-| Password status   | EnPSW   | 1      | This field indicates if the user has set a password in the APP to access the device.<br />1 means that the user has set a password, and 0 mens he has not. |
+| Password status   | EnPSW   | 1      | This field indicates if the user has set a password in the APP to access the device.<br />A value of 1 means that the user has set a password, and 0 means he has not. |
 | Reserved          | NC      | 2      | Reserved bytes. Not used.                                    |
 
 ## 3. Sending commands
 
-You can have the device execute a command sending a payload of **16 bytes** through the `WriteData` UUID. This payload has the following structure:
+You can have the device execute a command sending a payload of **16 bytes** through the `WriteData` UUID. The command payload has always the following structure:
 
 | Pos            | Length         | Item  | Description                                                  |
 | -------------- | -------------- | ----- | ------------------------------------------------------------ |
@@ -66,6 +69,8 @@ You can have the device execute a command sending a payload of **16 bytes** thro
 
 The DATA parameter has variable length, and is followed by a TOKEN and random data to fill the 16 bytes.
 
+Every command except the "get token" must provide the token to be accepted. So the first thing we must do when connecting to the device is getting our token (read section 4.5 forward).
+
 ## 4. Commands reference
 
 The following subsections describe the list of commands that the device can execute as asked by a client.
@@ -74,7 +79,7 @@ The following subsections describe the list of commands that the device can exec
 
 This command allows a client to check for the current battery level of the device.
 
-#### Command
+#### Request
 
 This command has the following structure:
 
@@ -116,7 +121,7 @@ The parameter `SwitchStatus`can be one of the following values:
 
 * 0x00: Switch Off.
 * 0x01: Switch On
-* 0x02: Toggle the current state.
+* 0x02: Push and retract.
 
 ### Response
 
@@ -147,9 +152,9 @@ The parameter `EnPsw` has one byte length and can be one of the following values
 * 0x00: Disable password.
 * 0x01: Enable password.
 
-The parameter `NewPassword`has a length of 6 bytes and is the new password to set if the parameter `EnPsw`has value 0x01. The password must be numeric and always have 6 digits.
+The parameter `NewPassword` is a numeric PIN of 6 digits that we provide as the new password for the device. It always has a length of 6 bytes if the parameter `EnPsw` has value 0x01. It must be encoded as hexadecimal ASCII characters, so if the new password is `123456`, the `NewPassword` parameter would have a value of `0x313233343536`.
 
-If `EnPsw`has value 0x00, `NewPassword`is ignored.
+If `EnPsw`has a value of 0x00, `NewPassword`is ignored.
 
 ### Response
 
@@ -175,15 +180,15 @@ This command allows the client to *schedule* the change of the switching state o
 | ---- | ---- | ---- | --------------------------- |
 | 0x05 | 0x08 | 0x02 | [Time] [SwitchStatus] |
 
-The parameter `Time`is a byte value (from 1 to 48) that specifies the amount of time (in multiples of 5 minutes) that the device will wait before executing the state switch. The maximum scheduled time is 240 minutes (4 hours).
+The parameter `Time` is a byte value (from 1 to 48) that specifies the amount of time (in multiples of 5 minutes) that the device will wait before executing the state switch. The maximum scheduled time is 240 minutes (4 hours).
 
-The parameter `SwitchStatus`can be one of the following values:
+The parameter `SwitchStatus` can be one of the following values:
 
 * 0x00: Switch Off.
 * 0x01: Switch On
-* 0x02: Toggle the current state.
+* 0x02: Push and retract.
 
-For example: If you want to switch on the device in half an hour, you specify `Time`with the value 0x06 and `SwitchStatus`with the value 0x01.
+For example: If you want to switch on the device in half an hour, you specify `Time` with the value 0x06 and `SwitchStatus` with the value 0x01.
 
 ### Response
 
@@ -205,13 +210,15 @@ This command allows the client to get the current token that we will use for sub
 
 Every other command will require us to provide this token.
 
+When testing connections to the device, I could experiment that if you don't send this command and get the token in about 5 seconds after connecting, the device disconnects automatically.
+
 ### Request
 
 | CMD1 | CMD2 | LEN  | DATA       |
 | ---- | ---- | ---- | ---------- |
 | 0x06 | 0x01 | 0x06 | [Password] |
 
-The parameter `Password` is the password that we have established to access the device. Initially when we pair the device to the APP, there is no password established.
+The parameter `Password` is the password that we have established to access the device. Initially when we pair the device to the APP, there is no password established so this parameter would be empty and the LEN would be 0x00.
 
 The password is always numeric and uses **6 digits**. We must provide the **ASCII** codes of these digits as parameter.
 
@@ -271,7 +278,7 @@ Otherwise, in case of error, it returns the following:
 
 ## 5. Communications Encryption
 
-All requests and responses from commands exchanged between the device and the client are encrypted using AES128 ECB algorithm.
+Both requests and responses from commands exchanged between the device and the client are always encrypted using **AES128 ECB** algorithm.
 
 This algorithm is a symmetric (reversible) encryption process that uses a key that is known by both parties before exchanging information. In MagicSwitchBot devices, the encryption key is a 16 bytes sequence whose decimal values are:
 
@@ -363,17 +370,17 @@ The process to send and receive data from a MagicSwitchBot device follows the ne
    | ---- | ---- | ---- | ------------------------ |
    | 0x06 | 0x01 | 0x06 | [CurrentPassword] [Fill] |
    
-   The `CurrentPassword` element is the password digits encoded as **6** ASCII characters. If there is no password, any data will be ignored, but there must be 6 bytes here.
-   Finally, `Fill` is a sequence of **7** random bytes to fill the **16 bytes** payload.
+   The `CurrentPassword` parameter is the password digits encoded as **6** ASCII characters. If there is no password, we must specify 0x00 as the `LEN` parameter, and `CurrentPassword` would be empty.
+   Finally, `Fill` is a sequence of **7** random bytes to fill the **16 bytes** payload (or 13 random bytes if the password is empty).
    
-1. **Encrypt the payload**.
+1. **Encrypt the command**.
    We encrypt the resulting command using AES128 ECB.
 
 1. **Send the command**.
-   We send the encrypted command using the `WriteData` UUID of the device.
+   We send the encrypted command using the `WriteData` UUID of the device. This first command must be sent in the following 5 seconds after connecting. Otherwise, the device disconnects itself.
 
 1. **Receive the response**.
-   Once the command is sent, we read the result using the `ReadData` UUID.
+   Once the command is sent, we must get a notification from the `ReadData` UUID with the result.
    For example we could get the following response:
    
    ```python
