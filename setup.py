@@ -4,8 +4,8 @@ setup(
     name='pyMagicSwitchbot',
     packages=['magicswitchbot'],
     install_requires=['bluepy', 'pycryptodome'],
-    version='0.0.1',
-    description='Library to control MagicSwitchbot devices (chinese clone of SwitchBot)',
+    version='1.0.0',
+    description='Library to control Magic Switchbot devices (chinese clone of Switchbot)',
     author='Isidoro Aguilar Baeza',
     url='https://github.com/ec-blaster/pyMagicSwitchbot',
     license='MIT',
@@ -17,5 +17,6 @@ setup(
         'Programming Language :: Python :: 3.5',
         'Topic :: Home Automation',
         'Topic :: Software Development :: Libraries :: Python Modules'
-      ]
+      ],
+    include_package_data=True
 )

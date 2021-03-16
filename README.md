@@ -42,9 +42,37 @@ The library is based on `bluepy`, so it does not work on Windows.
 
 The code is strongly influenced by [pySwitchbot](https://github.com/Danielhiversen/pySwitchbot) library by [Daniel Hjelseth Høyer (Danielhiversen)](https://github.com/Danielhiversen). My original idea was to modify this library and make it work for both devices families, but the internal working mode is quite different and most of the code was going to be different, so I decided to start a new project but using some of his good techniques and code.
 
-## Library usage
+## Using the library
 
+You need Python 3.5 or newer to use the library, and it is published to PyPi. So to use the library you simply import it.
 
+```python
+import magicswitchbot
+```
 
+or you can import only the main class:
 
+```python
+from magicswitchbot import MagicSwitchbot
+```
 
+### Constructor
+
+The library uses a main class called MagicSwitchbot. The constructor gets the device's MAC address as a parameter:
+
+```python
+DEVICE_MAC = "00:11:22:33:44:55"
+
+device = MagicSwitchbot(mac=DEVICE_MAC)
+```
+
+### Methods
+
+In addition to the constructor, the main class has the following public methods:
+
+* connect
+* is_connected
+* turn_on
+* turn_off
+* push
+* get_battery

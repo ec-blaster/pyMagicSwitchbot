@@ -12,9 +12,8 @@ from threading import Timer
 DEFAULT_RETRY_COUNT = 0
 DEFAULT_RETRY_TIMEOUT = 0.2
 NOTIFICATION_TIMEOUT = 5
-DISCONNECT_TIMEOUT = 10
+NO_TIMEOUT = -1
 
-logging.basicConfig(level=logging.INFO)
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -152,8 +151,20 @@ class MagicSwitchbotDevice:
     def __del__(self):
         self._disconnect()
 
-    def _connect(self) -> None:
-        if self._device is not None:
+    def _connect(self, timeout=NO_TIMEOUT) -> None:
+        """Connects to the device
+        
+        This method allows us to connect to the Magic Switchbot device
+        
+        Params
+        ------
+            timeout : int
+                Specifies the ammount of time (seconds) that will be scheduled to automatically
+                disconnect from the device. If it's not specified, the client does not disconnect
+                until the object is disposed from memory
+        
+        """
+        if self._is_connected():
             return
         try:
             _LOGGER.debug("Connecting to MagicSwitchbot at address %s...", self._mac)
@@ -161,7 +172,6 @@ class MagicSwitchbotDevice:
                                                   btle.ADDR_TYPE_PUBLIC,
                                                   self._interface)
             _LOGGER.info("Connected to MagicSwitchbot at %s", self._mac)
-            # time.sleep(0.5)
             
             '''Initialize service and characteristics handles to the device'''
             self._service = self._device.getServiceByUUID(self.UUID_SERVICE)
@@ -172,13 +182,14 @@ class MagicSwitchbotDevice:
             '''Once we connected, let's enable the response notifications'''
             self._enableNotifications()
             
-            '''We stablish a timer to disconnect after some time'''
-            Timer(DISCONNECT_TIMEOUT, self._auto_disconnect).start()
+            '''We stablish a timer to disconnect after some time, if the user wants so'''
+            if timeout != NO_TIMEOUT:
+                Timer(timeout, self._disconnect).start()
+                _LOGGER.info("Auto-disconnect enabled after %d seconds.", timeout)
         except btle.BTLEDisconnectError:
             _LOGGER.error("Device disconnected during connection attempt. You can try to reconnect.")
             self._device = None
             raise
-            
         except btle.BTLEException:
             _LOGGER.error("Failed to connect to MagicSwitchbot.", exc_info=True)
             self._device = None
@@ -204,7 +215,7 @@ class MagicSwitchbotDevice:
         try:
             res = self._cccdDescriptor.write(binascii.a2b_hex(self.CMD_ENNOTIF), withResponse=True)
             res = self._cccdDescriptor.read()
-            _LOGGER.debug("Notifications enabled")
+            _LOGGER.debug("Characteristic notifications enabled: %s", res)
             notifOk = True
         except btle.BTLEGattError as e:
             _LOGGER.error("Error enabling notifications: %s\n", str(e))
@@ -212,7 +223,7 @@ class MagicSwitchbotDevice:
         return notifOk
 
     def _disconnect(self) -> None:
-        if self._device is None:
+        if not self._is_connected():
             return
         _LOGGER.debug("Disconnecting from MagicSwitchBot")
         try:
@@ -224,9 +235,15 @@ class MagicSwitchbotDevice:
         finally:
             self._device = None
             
-    def _auto_disconnect(self):
-        if self._device is not None:
-            self._disconnect()
+    def _is_connected(self) -> bool:
+        """Checks if the device is connected
+        
+        Return
+        ------
+            bool
+                Returns True if the device is still connected
+        """
+        return self._device is not None
             
     def _encrypt(self, data) -> str:
         """Encrypts data using AES128 ECB
@@ -329,8 +346,24 @@ class MagicSwitchbotDevice:
         return write_result
 
     def _sendCommand(self, command, parameter, retry) -> bool:
+        """Sends a command to the device
         
-        '''First of all we check if there is no token retrieve'''
+        This method sends a command to the device via BLE, waiting and processing an execution response
+        
+        Parameters
+        ----------
+            command: str
+                Hexadecimal string with 2 bytes for the command (and subcommand) to execute
+            parameter: str
+                Hexadecimal string with 1 or more bytes as a parameter to the command
+
+        Returns
+        -------
+            bool
+                Returns True if the data was sent succesfully and did get a positive aknowledge after
+        """
+        
+        '''First of all we check if there is a token to retrieve'''
         if command != self.CMD_GETTOKEN and self._token is None:
             '''If the command is NOT GETTOKEN, we'll issue a GETOTKEN command before sending the actual command'''
             go = self._sendCommand(self.CMD_GETTOKEN, "" if self._password is None else self._password, retry)
@@ -344,7 +377,7 @@ class MagicSwitchbotDevice:
             
             _LOGGER.debug("Sending command to Magicswitchbot %s", encrypted_command)
             try:
-                if self._device is None:
+                if not self._is_connected():
                     self._connect()
                   
                 send_success = self._writeData(encrypted_command)
@@ -371,6 +404,7 @@ class MagicSwitchbotDevice:
                 return True
             if retry < 1:
                 _LOGGER.error("MagicSwitchbot communication failed. We won't try again.", exc_info=True)
+                self._device = None
                 return False
             else:
                 _LOGGER.warning("Cannot send command to MagicSwitchbot. Retrying (remaining attempts: %d)...", retry)
@@ -438,6 +472,31 @@ class MagicSwitchbotDevice:
 class MagicSwitchbot(MagicSwitchbotDevice):
     """Representation of a MagicSwitchbot."""
     
+    def connect(self, timeout=NO_TIMEOUT) -> None:
+        """Connects to the device
+        
+        This method allows us to connect to the Magic Switchbot device
+        
+        Params
+        ------
+            timeout : int
+                Specifies the ammount of time (seconds) that will be scheduled to automatically
+                disconnect from the device. If it's not specified, the client does not disconnect
+                until the object is disposed from memory
+        
+        """
+        return self._connect(timeout)
+    
+    def is_connected(self) -> bool:
+        """Checks if the device is connected
+        
+        Return
+        ------
+            bool
+                Returns True if the device is still connected
+        """
+        return self._is_connected()
+        
     def turn_on(self) -> bool:
         """Turn device on."""
         return self._sendCommand(self.CMD_SWITCH, self.PAR_SWITCHON, self._retry_count)
@@ -446,6 +505,10 @@ class MagicSwitchbot(MagicSwitchbotDevice):
         """Turn device off."""
         return self._sendCommand(self.CMD_SWITCH, self.PAR_SWITCHOFF, self._retry_count)
       
+    def push(self) -> bool:
+        """Just push."""
+        return self._sendCommand(self.CMD_SWITCH, self.PAR_SWITCHPUSH, self._retry_count)
+
     def get_battery(self) -> int:
         """Gets the device's battery level
         Return
@@ -456,8 +519,4 @@ class MagicSwitchbot(MagicSwitchbotDevice):
         if ok:
             return self._battery
         else:
-            return None 
-      
-    def push(self) -> bool:
-        """Just push."""
-        return self._sendCommand(self.CMD_SWITCH, self.PAR_SWITCHPUSH, self._retry_count)
+            return None
