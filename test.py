@@ -14,19 +14,23 @@ import time, logging
 
 logging.basicConfig(level=logging.INFO)
 
-MAC1 = "34:14:b5:4a:28:0e"
-MAC2 = "34:14:B5:4A:2A:24"
+MAC = "00:11:22:33:44:55"
 
-device = MagicSwitchbot(mac=MAC1)
+device = MagicSwitchbot(mac=MAC)
 
 device.connect(30)
 
 res = device.get_battery()
-print(f"Connected to device {MAC1} with {res}% of battery remaining")
+print(f"Connected to device {MAC} with {res}% of battery remaining")
 
-for t in range(60):
-    time.sleep(60)
-    print(f"{t+1} minutes elapsed...")
-    if not device.is_connected():
-        print("Connection with the device is lost")
-        break
+time.sleep(1)
+
+device.turn_on()
+
+time.sleep(1)
+
+device.turn_off()
+
+time.sleep(1)
+
+device.push()

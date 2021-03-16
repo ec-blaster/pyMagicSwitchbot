@@ -42,6 +42,16 @@ The library is based on `bluepy`, so it does not work on Windows.
 
 The code is strongly influenced by [pySwitchbot](https://github.com/Danielhiversen/pySwitchbot) library by [Daniel Hjelseth Høyer (Danielhiversen)](https://github.com/Danielhiversen). My original idea was to modify this library and make it work for both devices families, but the internal working mode is quite different and most of the code was going to be different, so I decided to start a new project but using some of his good techniques and code.
 
+## Important Note
+
+IMPORTANT: hcitool and python are not allowed to access bluetooth stack in LInux unless the user is root.
+To solve it (insecure), you must run these commands if you don' t have the privileges:          
+
+```bash
+sudo apt-get install libcap2-bin
+sudo setcap 'cap_net_raw,cap_net_admin+eip' $(readlink -f $(which python3))
+sudo setcap 'cap_net_raw+ep' $(readlink -f $(which hcitool))
+```
 ## Using the library
 
 You need Python 3.5 or newer to use the library, and it is published to PyPi. So to use it just fetch it:
@@ -89,6 +99,7 @@ Connects to the device
   
   * timeout : int
     Specifies the amount of time (seconds) that will be scheduled to automatically disconnect from the device. If it's not specified, the client does not disconnect until the object is disposed from memory
+  
 * `is_connected() ‑> bool`
 
   Checks if the device is connected.
@@ -109,3 +120,37 @@ Connects to the device
   Gets the device's battery level
 
   Returns int: Level of the device's battery, from 0 to 100
+
+## Example code
+
+The following example shows how to use the library in your Python program:
+
+```python
+from magicswitchbot import MagicSwitchbot
+import time, logging
+
+logging.basicConfig(level=logging.INFO)
+
+MAC = "00:11:22:33:44:55"
+
+device = MagicSwitchbot(mac=MAC)
+
+device.connect(30)
+
+res = device.get_battery()
+print(f"Connected to device {MAC} with {res}% of battery remaining")
+
+time.sleep(1)
+
+device.turn_on()
+
+time.sleep(1)
+
+device.turn_off()
+
+time.sleep(1)
+
+device.push()
+
+```
+
