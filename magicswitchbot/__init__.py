@@ -135,6 +135,20 @@ class MagicSwitchbotDevice:
     STA_ERR = "01"
     
     def __init__(self, mac, retry_count=DEFAULT_RETRY_COUNT, password=None, interface=None) -> None:
+        """Creates a new instance to control the device
+        
+        Parameters
+        ----------
+            mac : str
+                MAC address of the device
+            retry_count : int
+                Number of retries if the connection does not succed
+            password : string
+                Password or PIN set on the device
+            interface : int
+                Number of the bluetooth client interface to use. It will be prefixed by 'hci'. Default: hci0
+        
+        """
         self._interface = interface
         self._mac = mac
         self._device = None
@@ -506,7 +520,7 @@ class MagicSwitchbot(MagicSwitchbotDevice):
         return self._sendCommand(self.CMD_SWITCH, self.PAR_SWITCHOFF, self._retry_count)
       
     def push(self) -> bool:
-        """Just push."""
+        """Just push  a button"""
         return self._sendCommand(self.CMD_SWITCH, self.PAR_SWITCHPUSH, self._retry_count)
 
     def get_battery(self) -> int:

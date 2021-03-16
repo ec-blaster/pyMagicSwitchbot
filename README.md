@@ -44,35 +44,68 @@ The code is strongly influenced by [pySwitchbot](https://github.com/Danielhivers
 
 ## Using the library
 
-You need Python 3.5 or newer to use the library, and it is published to PyPi. So to use the library you simply import it.
+You need Python 3.5 or newer to use the library, and it is published to PyPi. So to use it just fetch it:
 
-```python
-import magicswitchbot
+```bash
+pip install magicswithbot
 ```
 
-or you can import only the main class:
+From your program just import the library or only the main class:
 
 ```python
+import magicswithbot
+
+--OR--
+
 from magicswitchbot import MagicSwitchbot
 ```
 
 ### Constructor
 
-The library uses a main class called MagicSwitchbot. The constructor gets the device's MAC address as a parameter:
+The library uses a main class called `MagicSwitchbot`. The constructor gets the device's MAC address as a parameter:
 
-```python
-DEVICE_MAC = "00:11:22:33:44:55"
+`MagicSwitchbot(mac, retry_count=0, password=None, interface=None)`
 
-device = MagicSwitchbot(mac=DEVICE_MAC)
-```
+##### Parameters:
+* mac : str
+  MAC address of the device
+* retry_count : int
+  Number of retries if the connection does not succed
+* password : string
+  Password or PIN set on the device
+* interface : int
+  Number of the bluetooth client interface to use. It will be prefixed by 'hci'. Default: hci0
 
 ### Methods
 
 In addition to the constructor, the main class has the following public methods:
 
-* connect
-* is_connected
-* turn_on
-* turn_off
-* push
-* get_battery
+* `connect(timeout=-1) ‑> NoneType`
+Connects to the device
+  
+  This method allows us to connect to the Magic Switchbot device.
+  
+  #### Parameters:
+  
+  * timeout : int
+    Specifies the amount of time (seconds) that will be scheduled to automatically disconnect from the device. If it's not specified, the client does not disconnect until the object is disposed from memory
+* `is_connected() ‑> bool`
+
+  Checks if the device is connected.
+
+  Returns bool: Returns True if the device is still connected
+
+* `turn_on() ‑> bool`
+  Turn device on.
+
+* `turn_off() ‑> bool`
+  Turn device off.
+
+* `push() ‑> bool`
+  Just push  a button
+
+* `get_battery() ‑> int`
+
+  Gets the device's battery level
+
+  Returns int: Level of the device's battery, from 0 to 100
