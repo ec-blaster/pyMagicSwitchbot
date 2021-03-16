@@ -1,6 +1,6 @@
 # MagicSwitchBot API
 
-This document is based on the information sent by *Shenzhen Interear Intelligent Technology Co., Ltd*, manufacturer of the "MagicSwitchBot" device, which is aparently a clone of SwitchBot.
+This document is based on the information provided by *Shenzhen Interear Intelligent Technology Co., Ltd*, manufacturer of the "Magic Switchbot" device, which is apparently a clone of Switchbot.
 
 Some of the data present in this document is also based on my own research by sniffing the device protocol and decompiling the original App ([read here](MagicSwitchBot_Reverse_Engineer.md) for more details).
 
