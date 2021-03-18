@@ -237,6 +237,7 @@ class MagicSwitchbotDevice:
         return notifOk
 
     def _disconnect(self) -> None:
+        """Discconnects from the device"""
         if not self._is_connected():
             return
         _LOGGER.debug("Disconnecting from MagicSwitchBot")
@@ -380,7 +381,7 @@ class MagicSwitchbotDevice:
         '''First of all we check if there is a token to retrieve'''
         if command != self.CMD_GETTOKEN and self._token is None:
             '''If the command is NOT GETTOKEN, we'll issue a GETOTKEN command before sending the actual command'''
-            go = self._sendCommand(self.CMD_GETTOKEN, "" if self._password is None else self._password, retry)
+            go = self._auth(self._password)
         else:
             go = True
         
@@ -428,6 +429,22 @@ class MagicSwitchbotDevice:
         else:
             return False
       
+    def _auth(self, password) -> bool:
+        """Validate the password set on the device
+        
+        Validate the password set on the device and gets the communication token
+        
+        Parameters
+        ----------
+            password : str
+                Current device password or empty (or None) if no password is set
+        Returns
+        -------
+            bool
+                Returns true if password is correct
+        """
+        return self._sendCommand(self.CMD_GETTOKEN, "" if password is None else password)
+        
     def _processResponse(self, response) -> bool:
         """Process the response from the device
       
@@ -500,6 +517,26 @@ class MagicSwitchbot(MagicSwitchbotDevice):
         
         """
         return self._connect(timeout)
+    
+    def auth(self, password) -> bool:
+        """Validate the password set on the device
+        
+        Validate the password set on the device and gets the communication token
+        
+        Parameters
+        ----------
+            password : str
+                Current device password or empty (or None) if no password is set
+        Returns
+        -------
+            bool
+                Returns true if password is correct
+        """
+        return self._auth(self, password)
+    
+    def disconnect(self) -> None:
+        """Discconnects from the device"""
+        return self._disconnect(self)
     
     def is_connected(self) -> bool:
         """Checks if the device is connected

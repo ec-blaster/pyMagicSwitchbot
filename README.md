@@ -98,22 +98,34 @@ Connects to the device
   #### Parameters:
   
   * timeout : int
-    Specifies the amount of time (seconds) that will be scheduled to automatically disconnect from the device. If it's not specified, the client does not disconnect until the object is disposed from memory
+    Specifies the amount of time (seconds) that will be scheduled to automatically disconnect from the device. If it's not specified, the client does not disconnect until the object is disposed from memory.
+* `disconnect()`
+
+  Manual disconnect.
+* `auth(password) ‑> bool`
+Validation of the password.
+  
+  This method allows us to validate the password and gets the current token..
+  
+  #### Parameters:
+  
+  * password : str
+    Current device password or empty (or None) if no password is set.
+  
+  Returns bool: Returns True if password is correct.
   
 * `is_connected() ‑> bool`
 
   Checks if the device is connected.
 
   Returns bool: Returns True if the device is still connected
-
 * `turn_on() ‑> bool`
-  Turn device on.
-
+  Use the device just to switch something on.
 * `turn_off() ‑> bool`
-  Turn device off.
+  Use the device just to switch something off.
 
 * `push() ‑> bool`
-  Just push  a button
+  Use the device just to push a button.
 
 * `get_battery() ‑> int`
 
