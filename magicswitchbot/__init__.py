@@ -429,21 +429,18 @@ class MagicSwitchbotDevice:
         else:
             return False
       
-    def _auth(self, password=self._password) -> bool:
+    def _auth(self) -> bool:
         """Validate the password set on the device
         
-        Validate the password set on the device and gets the communication token
-        
-        Parameters
-        ----------
-            password : str
-                Current device password or empty (or None) if no password is set
+        Validate the password set on the device and gets the communication token.
+        The password we use is set on construct
+
         Returns
         -------
             bool
                 Returns true if password is correct
         """
-        return self._sendCommand(self.CMD_GETTOKEN, "" if password is None else password)
+        return self._sendCommand(self.CMD_GETTOKEN, "" if self._password is None else self._password, self._retry_count)
         
     def _processResponse(self, response) -> bool:
         """Process the response from the device
@@ -518,21 +515,18 @@ class MagicSwitchbot(MagicSwitchbotDevice):
         """
         return self._connect(timeout)
     
-    def auth(self, password=self._password) -> bool:
+    def auth(self) -> bool:
         """Validate the password set on the device
         
-        Validate the password set on the device and gets the communication token
-        
-        Parameters
-        ----------
-            password : str
-                Current device password or empty (or None) if no password is set
+        Validate the password set on the device and gets the communication token.
+        The password we use is set on construct
+
         Returns
         -------
             bool
                 Returns true if password is correct
         """
-        return self._auth(self, password)
+        return self._auth()
     
     def disconnect(self) -> None:
         """Discconnects from the device"""
