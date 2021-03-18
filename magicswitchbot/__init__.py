@@ -429,7 +429,7 @@ class MagicSwitchbotDevice:
         else:
             return False
       
-    def _auth(self, password) -> bool:
+    def _auth(self, password=self._password) -> bool:
         """Validate the password set on the device
         
         Validate the password set on the device and gets the communication token
@@ -518,7 +518,7 @@ class MagicSwitchbot(MagicSwitchbotDevice):
         """
         return self._connect(timeout)
     
-    def auth(self, password) -> bool:
+    def auth(self, password=self._password) -> bool:
         """Validate the password set on the device
         
         Validate the password set on the device and gets the communication token
