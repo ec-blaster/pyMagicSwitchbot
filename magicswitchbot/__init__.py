@@ -509,7 +509,7 @@ class MagicSwitchbotDevice:
 class MagicSwitchbot(MagicSwitchbotDevice):
     """Representation of a MagicSwitchbot."""
     
-    def connect(self, timeout=NO_TIMEOUT) -> None:
+    def connect(self, timeout=NO_TIMEOUT) -> bool:
         """Connects to the device
         
         This method allows us to connect to the Magic Switchbot device
@@ -520,7 +520,10 @@ class MagicSwitchbot(MagicSwitchbotDevice):
                 Specifies the ammount of time (seconds) that will be scheduled to automatically
                 disconnect from the device. If it's not specified, the client does not disconnect
                 until the object is disposed from memory
-        
+        Returns
+        -------
+            bool
+                Returns True on successful connection
         """
         return self._connect(timeout)
     
