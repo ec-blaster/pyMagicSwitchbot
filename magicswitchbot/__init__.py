@@ -190,7 +190,7 @@ class MagicSwitchbotDevice:
             self._device = btle.Peripheral(self._mac,
                                                   btle.ADDR_TYPE_PUBLIC,
                                                   self._interface)
-            _LOGGER.info("Connected to MagicSwitchbot at %s", self._mac)
+            _LOGGER.info("Connected to MagicSwitchbot at %s from hci%d", self._mac, self._interface)
             
             '''Initialize service and characteristics handles to the device'''
             self._service = self._device.getServiceByUUID(self.UUID_SERVICE)
