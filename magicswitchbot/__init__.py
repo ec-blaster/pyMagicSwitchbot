@@ -165,7 +165,7 @@ class MagicSwitchbotDevice:
     def __del__(self):
         self._disconnect()
 
-    def _connect(self, timeout=NO_TIMEOUT) -> None:
+    def _connect(self, timeout=NO_TIMEOUT) -> bool:
         """Connects to the device
         
         This method allows us to connect to the Magic Switchbot device
@@ -176,10 +176,15 @@ class MagicSwitchbotDevice:
                 Specifies the ammount of time (seconds) that will be scheduled to automatically
                 disconnect from the device. If it's not specified, the client does not disconnect
                 until the object is disposed from memory
-        
+        Returns
+        -------
+            bool
+                Returns True on successful connection
         """
         if self._is_connected():
-            return
+            return True
+        
+        ok = True
         try:
             _LOGGER.debug("Connecting to MagicSwitchbot at address %s...", self._mac)
             self._device = btle.Peripheral(self._mac,
@@ -203,11 +208,15 @@ class MagicSwitchbotDevice:
         except btle.BTLEDisconnectError:
             _LOGGER.error("Device disconnected during connection attempt. You can try to reconnect.")
             self._device = None
-            raise
+            ok = False
+            # raise
         except btle.BTLEException:
             _LOGGER.error("Failed to connect to MagicSwitchbot.", exc_info=True)
             self._device = None
-            raise
+            ok = False
+            # raise
+            
+        return ok
 
     def _enableNotifications(self) -> bool:
         """Enable read notifications
