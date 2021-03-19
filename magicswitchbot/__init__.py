@@ -394,7 +394,7 @@ class MagicSwitchbotDevice:
             '''First of all we check if there is a token to retrieve'''
             if command != self.CMD_GETTOKEN and self._token is None:
                 '''If the command is NOT GETTOKEN, we'll issue a GETOTKEN command before sending the actual command'''
-                go = self._auth(self._password)
+                go = self._auth()
             else:
                 go = True
             
