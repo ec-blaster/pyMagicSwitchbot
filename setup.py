@@ -10,7 +10,7 @@ setup(
     name='pyMagicSwitchbot',
     packages=['magicswitchbot'],
     install_requires=['bluepy', 'pycryptodome'],
-    version='1.0.3',
+    version='1.0.4',
     description='Library to control Magic Switchbot devices (chinese clone of Switchbot)',
     long_description=long_description,
     long_description_content_type="text/markdown",

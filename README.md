@@ -80,7 +80,7 @@ The library uses a main class called `MagicSwitchbot`. The constructor gets the 
 * mac : str
   MAC address of the device
 * retry_count : int
-  Number of retries if the connection does not succed
+  Number of retries if the connection does not succeed
 * password : string
   Password or PIN set on the device
 * interface : int
@@ -97,20 +97,19 @@ Connects to the device
   
   #### Parameters:
   
-  * timeout : int
+  * `connect_timeout`: int (Optional)
+  
+    Specifies the amount of time (seconds) we'll be waiting for the bluetooth device to connect. If it doesn't connect on time, it returns False
+  
+  * `disconnect_timeout` : int (Optional)
     Specifies the amount of time (seconds) that will be scheduled to automatically disconnect from the device. If it's not specified, the client does not disconnect until the object is disposed from memory.
 * `disconnect()`
 
   Manual disconnect.
-* `auth(password) ‑> bool`
+* `auth() ‑> bool`
 Validation of the password.
   
-  This method allows us to validate the password and gets the current token..
-  
-  #### Parameters:
-  
-  * password : str
-    Current device password or empty (or None) if no password is set.
+  This method allows us to validate the password we provided to the class constructor, and gets the current token that will be used internally on all subsequent method calls.
   
   Returns bool: Returns True if password is correct.
   
@@ -138,6 +137,7 @@ Validation of the password.
 The following example shows how to use the library in your Python program:
 
 ```python
+# Test program (test.py)
 from magicswitchbot import MagicSwitchbot
 import time, logging
 

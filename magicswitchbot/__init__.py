@@ -13,8 +13,28 @@ DEFAULT_RETRY_COUNT = 0
 DEFAULT_RETRY_TIMEOUT = 0.2
 NOTIFICATION_TIMEOUT = 5
 NO_TIMEOUT = -1
+CONNECT_TIMEOUT = 3
 
 _LOGGER = logging.getLogger(__name__)
+
+
+class PeripheralExt(btle.Peripheral):
+    """Derived class from bluepy
+    
+    This subclass constructor is based  based on Pull Request #374 by Gunnarl,
+    https://github.com/IanHarvey/bluepy/pull/374)
+    It allows us to stablish a connect timeout to the bluetooth device.
+    """
+
+    def __init__(self, deviceAddr=None, addrType=btle.ADDR_TYPE_PUBLIC, iface=None, timeout=None):
+        btle.BluepyHelper.__init__(self)
+        self._serviceMap = None  # Indexed by UUID
+        (self.deviceAddr, self.addrType, self.iface) = (None, None, None)
+
+        if isinstance(deviceAddr, btle.ScanEntry):
+            self._connect(deviceAddr.addr, deviceAddr.addrType, deviceAddr.iface, timeout)
+        elif deviceAddr is not None:
+            self._connect(deviceAddr, addrType, iface, timeout)
 
 
 class MagicSwitchbotDelegate (btle.DefaultDelegate):
@@ -165,15 +185,18 @@ class MagicSwitchbotDevice:
     def __del__(self):
         self._disconnect()
 
-    def _connect(self, timeout=NO_TIMEOUT) -> bool:
+    def _connect(self, connect_timeout=CONNECT_TIMEOUT, disconnect_timeout=NO_TIMEOUT) -> bool:
         """Connects to the device
         
         This method allows us to connect to the Magic Switchbot device
         
         Params
         ------
-            timeout : int
-                Specifies the ammount of time (seconds) that will be scheduled to automatically
+            connect_timeout : int (Optional)
+                Specifies the amount of time (seconds) we'll be waiting for the bluetooth device
+                to connect. If it doesn't connect on time, it returns False
+            disconnect_timeout : int (Optional)
+                Specifies the amount of time (seconds) that will be scheduled to automatically
                 disconnect from the device. If it's not specified, the client does not disconnect
                 until the object is disposed from memory
         Returns
@@ -187,9 +210,10 @@ class MagicSwitchbotDevice:
         ok = True
         try:
             _LOGGER.debug("Connecting to MagicSwitchbot at address %s from hci%d...", self._mac, self._interface)
-            self._device = btle.Peripheral(self._mac,
-                                                  btle.ADDR_TYPE_PUBLIC,
-                                                  self._interface)
+            self._device = PeripheralExt(deviceAddr=self._mac,
+                                         addrType=btle.ADDR_TYPE_PUBLIC,
+                                         iface=self._interface,
+                                         timeout=connect_timeout)
             _LOGGER.info("Connected to MagicSwitchbot at %s from hci%d", self._mac, self._interface)
             
             '''Initialize service and characteristics handles to the device'''
@@ -202,9 +226,9 @@ class MagicSwitchbotDevice:
             self._enableNotifications()
             
             '''We stablish a timer to disconnect after some time, if the user wants so'''
-            if timeout != NO_TIMEOUT:
-                Timer(timeout, self._disconnect).start()
-                _LOGGER.info("Auto-disconnect enabled after %d seconds.", timeout)
+            if disconnect_timeout != NO_TIMEOUT:
+                Timer(disconnect_timeout, self._disconnect).start()
+                _LOGGER.info("Auto-disconnect enabled after %d seconds.", disconnect_timeout)
         except btle.BTLEDisconnectError:
             _LOGGER.error("Couldn't connect to Magic Switchbot device at %s", self._mac)
             self._device = None
@@ -512,15 +536,18 @@ class MagicSwitchbotDevice:
 class MagicSwitchbot(MagicSwitchbotDevice):
     """Representation of a MagicSwitchbot."""
     
-    def connect(self, timeout=NO_TIMEOUT) -> bool:
+    def connect(self, connect_timeout=CONNECT_TIMEOUT, disconnect_timeout=NO_TIMEOUT) -> bool:
         """Connects to the device
         
         This method allows us to connect to the Magic Switchbot device
         
         Params
         ------
-            timeout : int
-                Specifies the ammount of time (seconds) that will be scheduled to automatically
+            connect_timeout : int (Optional)
+                Specifies the amount of time (seconds) we'll be waiting for the bluetooth device
+                to connect. If it doesn't connect on time, it returns False
+            disconnect_timeout : int (Optional)
+                Specifies the amount of time (seconds) that will be scheduled to automatically
                 disconnect from the device. If it's not specified, the client does not disconnect
                 until the object is disposed from memory
         Returns
@@ -528,7 +555,7 @@ class MagicSwitchbot(MagicSwitchbotDevice):
             bool
                 Returns True on successful connection
         """
-        return self._connect(timeout)
+        return self._connect(connect_timeout, disconnect_timeout)
     
     def auth(self) -> bool:
         """Validate the password set on the device
