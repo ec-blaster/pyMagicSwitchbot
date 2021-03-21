@@ -90,7 +90,7 @@ The library uses a main class called `MagicSwitchbot`. The constructor gets the 
 
 In addition to the constructor, the main class has the following public methods:
 
-* `connect(timeout=-1) ‑> NoneType`
+* `connect(connect_timeout=3, disconnect_timeout=-1) ‑> NoneType`
 Connects to the device
   
   This method allows us to connect to the Magic Switchbot device.
@@ -99,10 +99,14 @@ Connects to the device
   
   * `connect_timeout`: int (Optional)
   
-    Specifies the amount of time (seconds) we'll be waiting for the bluetooth device to connect. If it doesn't connect on time, it returns False
+    Specifies the amount of time (in seconds) we'll be waiting for the bluetooth device to connect. If it doesn't connect on time, it returns False.
+  
+    This parameter is optional. If you don't specify a value, a 3 seconds timeout is assumed.
   
   * `disconnect_timeout` : int (Optional)
-    Specifies the amount of time (seconds) that will be scheduled to automatically disconnect from the device. If it's not specified, the client does not disconnect until the object is disposed from memory.
+    Specifies the amount of time (in seconds) that will be scheduled to automatically disconnect from the device. If it's not specified, the client does not disconnect until the object is disposed from memory.
+    
+    This parameter is optional. If you don't specify a value, a -1 is assumed (no automatic disconnect).
 * `disconnect()`
 
   Manual disconnect.
