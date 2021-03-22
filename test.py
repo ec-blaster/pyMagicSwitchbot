@@ -18,7 +18,7 @@ MAC = "00:11:22:33:44:55"
 
 device = MagicSwitchbot(mac=MAC)
 
-device.connect(30)
+device.connect(5,30)
 
 res = device.get_battery()
 print(f"Connected to device {MAC} with {res}% of battery remaining")
