@@ -74,17 +74,24 @@ from magicswitchbot import MagicSwitchbot
 
 The library uses a main class called `MagicSwitchbot`. The constructor gets the device's MAC address as a parameter:
 
-`MagicSwitchbot(mac, retry_count=0, password=None, interface=None)`
+`MagicSwitchbot(mac, retry_count=3, password=None, interface=0, connect_timeout=3)`
 
 ##### Parameters:
-* mac : str
+* `mac` : str (Required)
   MAC address of the device
-* retry_count : int
-  Number of retries if the connection does not succeed
-* password : string
-  Password or PIN set on the device
-* interface : int
-  Number of the bluetooth client interface to use. It will be prefixed by 'hci'. Default: hci0
+  
+* `retry_count` : int (Optional)
+  Number of retries if the connection does not succeed. Default: 3 times.
+  
+* `password` : string (Optional)
+  Password or PIN set on the device.
+  
+* `interface` : int (Optional)
+  Order of the bluetooth client interface to use. It will be prefixed by 'hci'. Default: 0 (hci0)
+  
+* `connect_timeout` : int (Optional)
+  
+  Timeout in seconds for every connection. Default: 3 seconds
 
 ### Methods
 
@@ -107,9 +114,11 @@ Connects to the device
     Specifies the amount of time (in seconds) that will be scheduled to automatically disconnect from the device. If it's not specified, the client does not disconnect until the object is disposed from memory.
     
     This parameter is optional. If you don't specify a value, a -1 is assumed (no automatic disconnect).
+  
 * `disconnect()`
 
   Manual disconnect.
+  
 * `auth() ‑> bool`
 Validation of the password.
   
@@ -122,14 +131,22 @@ Validation of the password.
   Checks if the device is connected.
 
   Returns bool: Returns True if the device is still connected
+  
 * `turn_on() ‑> bool`
-  Use the device just to switch something on.
+  Use the device to switch something on.
+  
+  Returns bool: Returns True if the command was sent succesfully.
+  
 * `turn_off() ‑> bool`
-  Use the device just to switch something off.
+  Use the device to switch something off.
 
+  Returns bool: Returns True if the command was sent succesfully.
+  
 * `push() ‑> bool`
   Use the device just to push a button.
 
+  Returns bool: Returns True if the command was sent succesfully.
+  
 * `get_battery() ‑> int`
 
   Gets the device's battery level
@@ -145,28 +162,39 @@ The following example shows how to use the library in your Python program:
 from magicswitchbot import MagicSwitchbot
 import time, logging
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 
 MAC = "00:11:22:33:44:55"
 
-device = MagicSwitchbot(mac=MAC)
-
-device.connect(5,30)
+device = MagicSwitchbot(mac=MAC, connect_timeout=10)
 
 res = device.get_battery()
-print(f"Connected to device {MAC} with {res}% of battery remaining")
+if res:
+    print(f"Connected to device {MAC} with {res}% of battery remaining")
+    time.sleep(1)
+    
+    print("Turning on...")
+    if device.turn_on():
+        print("Command executed successfully")
+    else:
+        print("Error sending command")
+    time.sleep(1)
+    
+    print("Turning off...")
+    if device.turn_off():
+        print("Command executed successfully")
+    else:
+        print("Error sending command")
+    time.sleep(1)
+    
+    print("Pushing...")
+    if device.push():
+        print("Command executed successfully")
+    else:
+        print("Error sending command")
+else:
+    print("Could't get battery status")
 
-time.sleep(1)
-
-device.turn_on()
-
-time.sleep(1)
-
-device.turn_off()
-
-time.sleep(1)
-
-device.push()
 
 ```
 

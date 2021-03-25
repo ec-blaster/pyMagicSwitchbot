@@ -1,5 +1,5 @@
 '''
-Testing new branch which manages MagicSwitchBot devices
+Testing MagicSwitchBot devices library
 
 IMPORTANT: hcitool and python is not allowed to access bluetooth stack unless the user is root
           To solve it (unsecure):
@@ -14,11 +14,9 @@ import time, logging
 
 logging.basicConfig(level=logging.DEBUG)
 
-MAC = "34:14:B5:4A:2A:24"
+MAC = "00:11:22:33:44:55"
 
-device = MagicSwitchbot(mac=MAC)
-
-device.connect(5, 30)
+device = MagicSwitchbot(mac=MAC, connect_timeout=10)
 
 res = device.get_battery()
 if res:
@@ -26,14 +24,23 @@ if res:
     time.sleep(1)
     
     print("Turning on...")
-    device.turn_on()
+    if device.turn_on():
+        print("Command executed successfully")
+    else:
+        print("Error sending command")
     time.sleep(1)
     
     print("Turning off...")
-    device.turn_off()
+    if device.turn_off():
+        print("Command executed successfully")
+    else:
+        print("Error sending command")
     time.sleep(1)
     
     print("Pushing...")
-    device.push()
+    if device.push():
+        print("Command executed successfully")
+    else:
+        print("Error sending command")
 else:
     print("Could't get battery status")

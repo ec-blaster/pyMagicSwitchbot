@@ -9,11 +9,16 @@ from bluepy import btle
 from Crypto.Cipher import AES
 from threading import Timer
 
-DEFAULT_RETRY_COUNT = 0
-DEFAULT_RETRY_TIMEOUT = 0.2
-NOTIFICATION_TIMEOUT = 5
+'''How many times we will retry in case of error'''
+DEFAULT_RETRY_COUNT = 3
+
+'''How many seconds to wait between retries'''
+DEFAULT_RETRY_TIMEOUT = 1
+
+'''Max seconds to wait before the connection is established''' 
+DEFAULT_CONNECT_TIMEOUT = 3
+
 NO_TIMEOUT = -1
-CONNECT_TIMEOUT = 3
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -129,7 +134,6 @@ class MagicSwitchbotDelegate (btle.DefaultDelegate):
         """
         if (cHandle == self._readHandle):
             '''Filter our notified data'''
-            _LOGGER.debug("Received data from device: %s", data)
             self._received = True
             self._data = data
         else:
@@ -177,7 +181,7 @@ class MagicSwitchbotDevice:
     STA_OK = "00"
     STA_ERR = "01"
     
-    def __init__(self, mac, retry_count=DEFAULT_RETRY_COUNT, password=None, interface=0) -> None:
+    def __init__(self, mac, retry_count=DEFAULT_RETRY_COUNT, password=None, interface=0, connect_timeout=DEFAULT_CONNECT_TIMEOUT) -> None:
         """Creates a new instance to control the device
         
         Parameters
@@ -190,6 +194,8 @@ class MagicSwitchbotDevice:
                 Password or PIN set on the device
             interface : int
                 Number of the bluetooth client interface to use. It will be prefixed by 'hci'. Default: hci0
+            connect_timeout : int
+                Timeout in seconds for every connection. Default: 3 seconds
         
         """
         self._interface = interface
@@ -204,11 +210,12 @@ class MagicSwitchbotDevice:
         self._token = None
         self._battery = None
         self._delegate = None
+        self._connectTimeout = connect_timeout
         
     def __del__(self):
         self._disconnect()
 
-    def _connect(self, connect_timeout=CONNECT_TIMEOUT, disconnect_timeout=NO_TIMEOUT) -> bool:
+    def _connect(self, connect_timeout=DEFAULT_CONNECT_TIMEOUT, disconnect_timeout=NO_TIMEOUT, retries=1) -> bool:
         """Connects to the device
         
         This method allows us to connect to the Magic Switchbot device
@@ -232,40 +239,45 @@ class MagicSwitchbotDevice:
         if self._is_connected():
             return True
         
-        ok = True
-        try:
-            _LOGGER.debug("MagicSwitchbot[%s] Connecting using hci%d...", self._mac, self._interface)
-            self._device = PeripheralExt(deviceAddr=self._mac,
-                                         addrType=btle.ADDR_TYPE_PUBLIC,
-                                         iface=self._interface,
-                                         timeout=connect_timeout)
-            _LOGGER.info("MagicSwitchbot[%s] Connected with hci%d", self._mac, self._interface)
+        connected = False
+        for i in range(retries): 
+            try:
+                _LOGGER.debug("MagicSwitchbot[%s] Connecting using hci%d with %d seconds timeout (%d of %d retries)...", self._mac, self._interface, connect_timeout, (i + 1), retries)
+                self._device = PeripheralExt(deviceAddr=self._mac,
+                                             addrType=btle.ADDR_TYPE_PUBLIC,
+                                             iface=self._interface,
+                                             timeout=connect_timeout)
+                _LOGGER.info("MagicSwitchbot[%s] Connected with hci%d.", self._mac, self._interface)
+                
+                '''Initialize service and characteristics handles to the device'''
+                self._service = self._device.getServiceByUUID(self.UUID_SERVICE)
+                self._userReadChar = self._service.getCharacteristics(self.UUID_USERREAD_CHAR)[0]
+                self._cccdDescriptor = self._userReadChar.getDescriptors(forUUID=self.UUID_NOTIFY_SET)[0]
+                self._userWriteChar = self._service.getCharacteristics(self.UUID_USERWRITE_CHAR)[0]
+    
+                '''Once we connected, let's enable the response notifications'''
+                self._enableNotifications()
+                
+                connected = True
+                
+                '''We stablish a timer to disconnect after some time, if the user wants so'''
+                if disconnect_timeout != NO_TIMEOUT:
+                    Timer(disconnect_timeout, self._disconnect).start()
+                    _LOGGER.info("MagicSwitchbot[%s] Auto-disconnect enabled after %d seconds.", self._mac, disconnect_timeout)
+            except btle.BTLEDisconnectError as e:
+                _LOGGER.error("MagicSwitchbot[%s] Couldn't connect to device (%s)", self._mac, str(e))
+                self._device = None
+            except btle.BTLEException:
+                _LOGGER.error("MagicSwitchbot[%s] Failed to connect to device", self._mac, exc_info=True)
+                self._device = None
             
-            '''Initialize service and characteristics handles to the device'''
-            self._service = self._device.getServiceByUUID(self.UUID_SERVICE)
-            self._userReadChar = self._service.getCharacteristics(self.UUID_USERREAD_CHAR)[0]
-            self._cccdDescriptor = self._userReadChar.getDescriptors(forUUID=self.UUID_NOTIFY_SET)[0]
-            self._userWriteChar = self._service.getCharacteristics(self.UUID_USERWRITE_CHAR)[0]
-
-            '''Once we connected, let's enable the response notifications'''
-            self._enableNotifications()
-            
-            '''We stablish a timer to disconnect after some time, if the user wants so'''
-            if disconnect_timeout != NO_TIMEOUT:
-                Timer(disconnect_timeout, self._disconnect).start()
-                _LOGGER.info("MagicSwitchbot[%s] Auto-disconnect enabled after %d seconds.", self._mac, disconnect_timeout)
-        except btle.BTLEDisconnectError as e:
-            _LOGGER.error("MagicSwitchbot[%s] Couldn't connect to device (%s)", self._mac, str(e))
-            self._device = None
-            ok = False
-            # raise
-        except btle.BTLEException:
-            _LOGGER.error("MagicSwitchbot[%s] Failed to connect to device", self._mac, exc_info=True)
-            self._device = None
-            ok = False
-            # raise
-            
-        return ok
+            if connected:
+                return True
+            else:
+                _LOGGER.error("MagicSwitchbot[%s] Waiting %d seconds...", self._mac, DEFAULT_RETRY_TIMEOUT)
+                time.sleep(DEFAULT_RETRY_TIMEOUT)
+        
+        return connected
 
     def _enableNotifications(self) -> bool:
         """Enable read notifications
@@ -297,7 +309,9 @@ class MagicSwitchbotDevice:
     def _disconnect(self) -> None:
         """Discconnects from the device"""
         if not self._is_connected():
+            self._device = None
             return
+        
         _LOGGER.debug("MagicSwitchbot[%s] Disconnecting", self._mac)
         try:
             self._device.disconnect()
@@ -316,7 +330,21 @@ class MagicSwitchbotDevice:
             bool
                 Returns True if the device is still connected
         """
-        return self._device is not None
+        
+        if self._device is not None:
+            conn_status = ""
+            try:
+                '''We get the current connection state using an undocumented method from Peripheral'''
+                conn_status = self._device.getState()
+            except Exception as e:
+                _LOGGER.warn("MagicSwitchbot[%s] Error getting connection state: %s", self._mac, str(e))
+            connected = (conn_status == "conn")
+        else:
+            connected = False
+            
+        _LOGGER.warn("MagicSwitchbot[%s] Connected state: %s", self._mac, "True" if connected else "False")
+        
+        return connected
             
     def _encrypt(self, data) -> str:
         """Encrypts data using AES128 ECB
@@ -384,7 +412,9 @@ class MagicSwitchbotDevice:
         rndLen = 32 - len(command) - len(parameter) - len(tok) - 2
         rndTail = ''.join([str(y) for _ in range(rndLen) for y in random.choice('0123456789abcdef')])
         
-        fullCommand = command + parmLen + parameter + tok + rndTail  
+        fullCommand = command + parmLen + parameter + tok + rndTail
+        
+        _LOGGER.debug("MagicSwitchbot[%s] Sending command: %s", self._mac, fullCommand)
 
         return self._encrypt(fullCommand)
 
@@ -411,11 +441,11 @@ class MagicSwitchbotDevice:
         if not write_result:
             _LOGGER.error("MagicSwitchbot[%s] Sent command but didn't get a response. Please check the device.", self._mac)
         else:
-            _LOGGER.info("MagicSwitchbot[%s] Command sent: %s", self._mac, data)
+            _LOGGER.info("MagicSwitchbot[%s] Data sent OK", self._mac)
             
         return write_result
 
-    def _sendCommand(self, command, parameter, retry) -> bool:
+    def _sendCommand(self, command, parameter, retries) -> bool:
         """Sends a command to the device
         
         This method sends a command to the device via BLE, waiting and processing an execution response
@@ -426,6 +456,8 @@ class MagicSwitchbotDevice:
                 Hexadecimal string with 2 bytes for the command (and subcommand) to execute
             parameter: str
                 Hexadecimal string with 1 or more bytes as a parameter to the command
+            retries : int
+                Number of times that the connection will be retried in case of error
 
         Returns
         -------
@@ -433,10 +465,7 @@ class MagicSwitchbotDevice:
                 Returns True if the data was sent succesfully and did get a positive aknowledge after
         """
         
-        if not self._is_connected():
-            self._connect()
-            
-        if self._is_connected():
+        if self._connect(connect_timeout=self._connectTimeout, retries=retries):
             '''First of all we check if there is a token to retrieve'''
             if command != self.CMD_GETTOKEN and self._token is None:
                 '''If the command is NOT GETTOKEN, we'll issue a GETOTKEN command before sending the actual command'''
@@ -448,8 +477,6 @@ class MagicSwitchbotDevice:
                 send_success = False
                 resp_success = False
                 encrypted_command = self._prepareCommand(command, parameter)
-                
-                _LOGGER.debug("MagicSwitchbot[%s] Sending command: %s", self._mac, command)
                 try:
                     send_success = self._writeData(encrypted_command)
                     if send_success:
@@ -470,18 +497,19 @@ class MagicSwitchbotDevice:
                         resp_success = self._processResponse(plain_response)
                 except btle.BTLEException as e:
                     _LOGGER.warning("MagicSwitchbot[%s] Communication error: %s", self._mac, str(e))
+                    self._disconnect()
                     
                 if resp_success:
                     return True
-                if retry < 1:
+                if retries < 1:
                     _LOGGER.error("MagicSwitchbot[%s] Communication failed. We won't try again.", self._mac, exc_info=True)
                     self._device = None
                     return False
                 else:
-                    _LOGGER.warning("MagicSwitchbot[%s] Communication failed. Remaining attempts: %d...", self._mac, retry)
+                    _LOGGER.warning("MagicSwitchbot[%s] Communication failed. Remaining attempts: %d...", self._mac, retries)
         
                 time.sleep(DEFAULT_RETRY_TIMEOUT)
-                return self._sendCommand(command, parameter, retry - 1)
+                return self._sendCommand(command, parameter, retries - 1)
             else:
                 return False
         else:
@@ -558,7 +586,7 @@ class MagicSwitchbotDevice:
 class MagicSwitchbot(MagicSwitchbotDevice):
     """Representation of a MagicSwitchbot."""
     
-    def connect(self, connect_timeout=CONNECT_TIMEOUT, disconnect_timeout=NO_TIMEOUT) -> bool:
+    def connect(self, connect_timeout=DEFAULT_CONNECT_TIMEOUT, disconnect_timeout=NO_TIMEOUT) -> bool:
         """Connects to the device
         
         This method allows us to connect to the Magic Switchbot device
