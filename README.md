@@ -57,7 +57,7 @@ sudo setcap 'cap_net_raw+ep' $(readlink -f $(which hcitool))
 You need Python 3.5 or newer to use the library, and it is published to PyPi. So to use it just fetch it:
 
 ```bash
-pip install magicswithbot
+pip install magicswitchbot
 ```
 
 From your program just import the library or only the main class:
