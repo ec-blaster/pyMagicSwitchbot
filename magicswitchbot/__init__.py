@@ -338,6 +338,10 @@ class MagicSwitchbotDevice:
                 conn_status = self._device.getState()
             except Exception as e:
                 _LOGGER.warn("MagicSwitchbot[%s] Error getting connection state: %s", self._mac, str(e))
+                '''We have an unknown state. Let's disconnect'''
+                self._device.disconnect()
+                self._token = None
+                self._device = None
             connected = (conn_status == "conn")
         else:
             connected = False
