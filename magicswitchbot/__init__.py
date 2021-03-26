@@ -342,7 +342,7 @@ class MagicSwitchbotDevice:
         else:
             connected = False
             
-        _LOGGER.warn("MagicSwitchbot[%s] Connected state: %s", self._mac, "True" if connected else "False")
+        _LOGGER.debug("MagicSwitchbot[%s] Connected state: %s", self._mac, "True" if connected else "False")
         
         return connected
             
@@ -414,7 +414,7 @@ class MagicSwitchbotDevice:
         
         fullCommand = command + parmLen + parameter + tok + rndTail
         
-        _LOGGER.debug("MagicSwitchbot[%s] Sending command: %s", self._mac, fullCommand)
+        _LOGGER.info("MagicSwitchbot[%s] Sending command: %s", self._mac, fullCommand)
 
         return self._encrypt(fullCommand)
 
@@ -441,7 +441,7 @@ class MagicSwitchbotDevice:
         if not write_result:
             _LOGGER.error("MagicSwitchbot[%s] Sent command but didn't get a response. Please check the device.", self._mac)
         else:
-            _LOGGER.info("MagicSwitchbot[%s] Data sent OK", self._mac)
+            _LOGGER.debug("MagicSwitchbot[%s] Data sent OK", self._mac)
             
         return write_result
 
