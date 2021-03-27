@@ -12,6 +12,7 @@ import random
 from bluepy import btle
 from Crypto.Cipher import AES
 from threading import Timer
+from homeassistant.components.websocket_api.error import Disconnect
 
 '''How many times we will retry in case of error'''
 DEFAULT_RETRY_COUNT = 3
@@ -198,7 +199,7 @@ class MagicSwitchbotDevice:
     STA_OK = "00"
     STA_ERR = "01"
     
-    def __init__(self, mac, retry_count=DEFAULT_RETRY_COUNT, password=None, interface=0, connect_timeout=DEFAULT_CONNECT_TIMEOUT) -> None:
+    def __init__(self, mac, retry_count=DEFAULT_RETRY_COUNT, password=None, interface=0, connect_timeout=DEFAULT_CONNECT_TIMEOUT, disconnect_timeout=NO_TIMEOUT) -> None:
         """Creates a new instance to control the device
         
         Parameters
@@ -228,6 +229,8 @@ class MagicSwitchbotDevice:
         self._battery = None
         self._delegate = None
         self._connectTimeout = connect_timeout
+        self._disconnectTimeout = disconnect_timeout
+        self._timer = None
         
     def __del__(self):
         self._disconnect()
@@ -257,6 +260,8 @@ class MagicSwitchbotDevice:
             return True
         
         connected = False
+        if disconnect_timeout != NO_TIMEOUT:
+            self._disconnectTimeout = disconnect_timeout
         partial_connect = False
         for i in range(retries): 
             try:
@@ -279,10 +284,7 @@ class MagicSwitchbotDevice:
                 
                 connected = True
                 
-                '''We stablish a timer to disconnect after some time, if the user wants so'''
-                if disconnect_timeout != NO_TIMEOUT:
-                    Timer(disconnect_timeout, self._disconnect).start()
-                    _LOGGER.info("MagicSwitchbot[%s] Auto-disconnect enabled after %d seconds.", self._mac, disconnect_timeout)
+                self._scheduleDisconnection()
             except btle.BTLEDisconnectError as e:
                 if partial_connect:
                     _LOGGER.error("MagicSwitchbot[%s] Incomplete connection to device (%s)", self._mac, str(e))
@@ -300,6 +302,17 @@ class MagicSwitchbotDevice:
                 time.sleep(DEFAULT_RETRY_TIMEOUT)
         
         return connected
+    
+    def _scheduleDisconnection(self):
+        '''We stablish a timer to disconnect after some time, if the user wants so'''
+        
+        if self._timer is not None:
+            self._timer.cancel()
+            
+        if self._disconnectTimeout != NO_TIMEOUT:
+            self._timer = Timer(self._disconnectTimeout, self._disconnect, [True]) 
+            self._timer.start()
+            _LOGGER.info("MagicSwitchbot[%s] Auto-disconnect scheduled for %d seconds.", self._mac, self._disconnectTimeout)
 
     def _enableNotifications(self) -> bool:
         """Enable read notifications
@@ -328,10 +341,11 @@ class MagicSwitchbotDevice:
 
         return notifOk
 
-    def _disconnect(self) -> None:
+    def _disconnect(self, scheduled=False) -> None:
         """Discconnects from the device"""
         
-        _LOGGER.debug("MagicSwitchbot[%s] Disconnecting", self._mac)
+        self._timer = None
+        _LOGGER.debug("MagicSwitchbot[%s] Disconnecting%s", self._mac, " on scheduled time" if scheduled else "")
         if not self._is_connected():
             self._device = None
             _LOGGER.debug("MagicSwitchbot[%s] The device was not connected", self._mac)
@@ -535,6 +549,7 @@ class MagicSwitchbotDevice:
                     self._disconnect()
                     
                 if resp_success:
+                    self._scheduleDisconnection()
                     return True
                 if retries < 1:
                     _LOGGER.error("MagicSwitchbot[%s] Communication failed. We won't try again.", self._mac, exc_info=True)
