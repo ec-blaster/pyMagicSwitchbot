@@ -1,5 +1,9 @@
 """
-Library to control MagicSwitchbot devices (chinese clone of SwitchBot)
+Library to control MagicSwitchbot devices
+
+@author: ec-blaster
+@since: March 2021
+@license: MIT 
 """
 import time
 import binascii
@@ -8,6 +12,7 @@ import random
 from bluepy import btle
 from Crypto.Cipher import AES
 from threading import Timer
+from docutils.nodes import Part
 
 '''How many times we will retry in case of error'''
 DEFAULT_RETRY_COUNT = 3
@@ -71,7 +76,7 @@ class MagicSwitchbotDelegate (btle.DefaultDelegate):
     Bluetooth notifications subscription to handle responses from the MagicSwitchbot device
     """
 
-    def __init__(self, readHandle):
+    def __init__(self, readHandle, mac):
         """Class constructor
         
         This constructor must receive the handle of the characteristic we want to subscribe to.
@@ -79,19 +84,22 @@ class MagicSwitchbotDelegate (btle.DefaultDelegate):
         ----------
         readHandle : int
             Handle to the bluetooth characteristic we want to subscribe
+        mac : string
+            MAC address of the device
         """
         btle.DefaultDelegate.__init__(self)
         self._readHandle = readHandle
+        self._mac = mac
         self._data = None
         self._received = False
-        _LOGGER.debug("Notification handler for MagicSwtichbot initialized")
+        _LOGGER.debug("MagicSwitchbot[%s] Notification handler initialized", mac)
       
     def resetData(self):
         """Resets the received data through the characteristic
         """
         self._data = None
         self._received = False
-        _LOGGER.debug("Resetting received data")
+        _LOGGER.debug("MagicSwitchbot[%s] Resetting received data", self._mac)
       
     def hasData(self) -> bool:
         """Check if data received
@@ -138,7 +146,7 @@ class MagicSwitchbotDelegate (btle.DefaultDelegate):
             self._data = data
         else:
             '''Discard all other notifications'''
-            _LOGGER.debug("Received data from device at unexpected handle %d: %s", cHandle, data)
+            _LOGGER.debug("MagicSwitchbot[%s] Received data from device at unexpected handle %d: %s", self._mac, cHandle, data)
             btle.DefaultDelegate.handleNotification(self, cHandle, data)
 
 
@@ -162,6 +170,16 @@ class MagicSwitchbotDevice:
     CMD_MODIFYPWD = "0504"
     CMD_TIMEDSWITCH = "0508"
     CMD_GETTOKEN = "0601"
+    
+    COMMANDS = {
+        CMD_ENNOTIF: "CMD_ENNOTIF",
+        CMD_GETBAT: "CMD_GETBAT",
+        CMD_OTA: "CMD_OTA",
+        CMD_SWITCH: "CMD_SWITCH",
+        CMD_MODIFYPWD: "CMD_MODIFYPWD",
+        CMD_TIMEDSWITCH: "CMD_TIMEDSWITCH",
+        CMD_GETTOKEN: "CMD_GETTOKEN"
+    }
     
     """Protocol parameters definition"""
     PAR_SWITCHON = "01"
@@ -240,6 +258,7 @@ class MagicSwitchbotDevice:
             return True
         
         connected = False
+        partial_connect = False
         for i in range(retries): 
             try:
                 _LOGGER.debug("MagicSwitchbot[%s] Connecting using hci%d with %d seconds timeout (%d of %d retries)...", self._mac, self._interface, connect_timeout, (i + 1), retries)
@@ -248,6 +267,7 @@ class MagicSwitchbotDevice:
                                              iface=self._interface,
                                              timeout=connect_timeout)
                 _LOGGER.info("MagicSwitchbot[%s] Connected with hci%d.", self._mac, self._interface)
+                partial_connect = True
                 
                 '''Initialize service and characteristics handles to the device'''
                 self._service = self._device.getServiceByUUID(self.UUID_SERVICE)
@@ -265,7 +285,10 @@ class MagicSwitchbotDevice:
                     Timer(disconnect_timeout, self._disconnect).start()
                     _LOGGER.info("MagicSwitchbot[%s] Auto-disconnect enabled after %d seconds.", self._mac, disconnect_timeout)
             except btle.BTLEDisconnectError as e:
-                _LOGGER.error("MagicSwitchbot[%s] Couldn't connect to device (%s)", self._mac, str(e))
+                if partial_connect:
+                    _LOGGER.error("MagicSwitchbot[%s] Incomplete connection to device (%s)", self._mac, str(e))
+                else:
+                    _LOGGER.error("MagicSwitchbot[%s] Couldn't connect to device (%s)", self._mac, str(e))
                 self._device = None
             except btle.BTLEException:
                 _LOGGER.error("MagicSwitchbot[%s] Failed to connect to device", self._mac, exc_info=True)
@@ -273,8 +296,8 @@ class MagicSwitchbotDevice:
             
             if connected:
                 return True
-            else:
-                _LOGGER.error("MagicSwitchbot[%s] Waiting %d seconds...", self._mac, DEFAULT_RETRY_TIMEOUT)
+            elif i < retries - 1:
+                _LOGGER.debug("MagicSwitchbot[%s] Retrying in %d seconds...", self._mac, DEFAULT_RETRY_TIMEOUT)
                 time.sleep(DEFAULT_RETRY_TIMEOUT)
         
         return connected
@@ -292,7 +315,7 @@ class MagicSwitchbotDevice:
         _LOGGER.debug("MagicSwitchbot[%s] Client Characteristic Configuration Descriptor: %s. Handle: 0x%X", self._mac, self.UUID_NOTIFY_SET, self._cccdDescriptor.handle)
 
         '''Subscribe to userRed characteristic notifications'''
-        self._delegate = MagicSwitchbotDelegate(readHandle)
+        self._delegate = MagicSwitchbotDelegate(readHandle, self._mac)
         self._device.withDelegate(self._delegate)
 
         '''Enable the notifications for the read characteristic'''
@@ -308,11 +331,13 @@ class MagicSwitchbotDevice:
 
     def _disconnect(self) -> None:
         """Discconnects from the device"""
-        if not self._is_connected():
-            self._device = None
-            return
         
         _LOGGER.debug("MagicSwitchbot[%s] Disconnecting", self._mac)
+        if not self._is_connected():
+            self._device = None
+            _LOGGER.debug("MagicSwitchbot[%s] The device was not connected", self._mac)
+            return
+        
         try:
             self._device.disconnect()
             _LOGGER.info("MagicSwitchbot[%s] Client disconnected", self._mac)
@@ -333,15 +358,22 @@ class MagicSwitchbotDevice:
         
         if self._device is not None:
             conn_status = ""
-            try:
-                '''We get the current connection state using an undocumented method from Peripheral'''
-                conn_status = self._device.getState()
-            except Exception as e:
-                _LOGGER.warn("MagicSwitchbot[%s] Error getting connection state: %s", self._mac, str(e))
-                '''We have an unknown state. Let's disconnect'''
-                self._device.disconnect()
-                self._token = None
-                self._device = None
+            
+            for i in range (self._retry_count):
+                try:
+                    '''We get the current connection state using an undocumented method from Peripheral'''
+                    conn_status = self._device.getState()
+                except Exception as e:
+                    _LOGGER.warn("MagicSwitchbot[%s] %s when checking connection state (%d of %d attempts)", self._mac, str(e), i + 1, self._retry_count)
+                    
+                    if i < self._retry_count - 1:
+                        '''We'll retry to check the state'''
+                        time.sleep(0.5)
+                    else:
+                        '''We have an unknown state. Let's disconnect'''
+                        self._device.disconnect()
+                        self._token = None
+                        self._device = None
             connected = (conn_status == "conn")
         else:
             connected = False
@@ -418,7 +450,7 @@ class MagicSwitchbotDevice:
         
         fullCommand = command + parmLen + parameter + tok + rndTail
         
-        _LOGGER.info("MagicSwitchbot[%s] Sending command: %s", self._mac, fullCommand)
+        _LOGGER.info("MagicSwitchbot[%s] Sending %s command: %s", self._mac, self.COMMANDS[command], fullCommand)
 
         return self._encrypt(fullCommand)
 
@@ -439,7 +471,7 @@ class MagicSwitchbotDevice:
         """
       
         self._delegate.resetData()
-        _LOGGER.debug("MagicSwitchbot[%s] Sending data, %s", self._mac, data)
+        _LOGGER.debug("MagicSwitchbot[%s] Sending encrypted data: %s", self._mac, data)
         write_result = self._userWriteChar.write(binascii.a2b_hex(data), True)
         
         if not write_result:
@@ -494,7 +526,7 @@ class MagicSwitchbotDevice:
                             _LOGGER.debug("MagicSwitchbot[%s] Waiting...", self._mac)
                         
                         encrypted_response = self._delegate.getData()
-                        _LOGGER.debug("MagicSwitchbot[%s] Raw data received:  %s", self._mac, encrypted_response)
+                        _LOGGER.debug("MagicSwitchbot[%s] Encrypted data received: %s", self._mac, encrypted_response)
                         
                         plain_response = self._decrypt(encrypted_response)
                         _LOGGER.debug("MagicSwitchbot[%s] Unencrypted result: %s", self._mac, plain_response)
@@ -563,7 +595,7 @@ class MagicSwitchbotDevice:
                 ver_major = int(param[10:12])
                 ver_minor = int(param[12:14])
                 dev_type = param[14:16]
-                en_pwd = param[16:18]
+                en_pwd = "False" if param[16:18] == '00' else "True"
                 self._token = token 
                 _LOGGER.info("MagicSwitchbot[%s] The current connection token is %s", self._mac, token)
                 _LOGGER.info("MagicSwitchbot[%s] Chip type: %s, Firmware version: %d.%d, Device type: %s, Password enabled: %s", self._mac, chip_type, ver_major, ver_minor, dev_type, en_pwd)
@@ -573,7 +605,7 @@ class MagicSwitchbotDevice:
         elif command == self.CMD_GETBAT[0:2]:
             if ret_code == self.RC_GETBAT and param.upper() != "FF":
                 self._battery = int("0x" + param, 16)
-                _LOGGER.info("MagicSwitchbot[%s] Battery level: %d", self._mac, self._battery)
+                _LOGGER.info("MagicSwitchbot[%s] Battery level: %d%%", self._mac, self._battery)
                 success = True
             else:
                 self._battery = None

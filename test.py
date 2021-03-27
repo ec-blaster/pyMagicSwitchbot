@@ -16,31 +16,37 @@ logging.basicConfig(level=logging.DEBUG)
 
 MAC = "00:11:22:33:44:55"
 
-device = MagicSwitchbot(mac=MAC, connect_timeout=10)
+device = MagicSwitchbot(mac=MAC, connect_timeout=15)
 
+print(f"Connecting to MagicSwitchbot device at {MAC}...")
 res = device.get_battery()
 if res:
-    print(f"Connected to device {MAC} with {res}% of battery remaining")
+    print(f"Connected to MagicSwitchbot device at {MAC} with {res}% of battery remaining")
     time.sleep(1)
-    
+   
     print("Turning on...")
-    if device.turn_on():
+    ok = device.turn_on() 
+    if ok:
         print("Command executed successfully")
+        time.sleep(1)
+        
+        print("Turning off...")
+        ok = device.turn_off()
+        if ok:
+            print("Command executed successfully")
+            time.sleep(1)
+        
+            print("Pushing...")
+            if device.push():
+                print("Command executed successfully")
+            else:
+                print("Error sending command")
+            
+        else:
+            print("Error sending command")
+        
     else:
         print("Error sending command")
-    time.sleep(1)
     
-    print("Turning off...")
-    if device.turn_off():
-        print("Command executed successfully")
-    else:
-        print("Error sending command")
-    time.sleep(1)
-    
-    print("Pushing...")
-    if device.push():
-        print("Command executed successfully")
-    else:
-        print("Error sending command")
 else:
     print("Could't get battery status")

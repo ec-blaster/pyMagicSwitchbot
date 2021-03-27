@@ -63,7 +63,7 @@ pip install pymagicswitchbot
 From your program just import the library or only the main class:
 
 ```python
-import magicswithbot
+import magicswitchbot
 
 --OR--
 
