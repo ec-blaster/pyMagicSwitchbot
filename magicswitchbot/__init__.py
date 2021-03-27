@@ -657,7 +657,7 @@ class MagicSwitchbot(MagicSwitchbotDevice):
     
     def disconnect(self) -> None:
         """Discconnects from the device"""
-        return self._disconnect(self)
+        return self._disconnect()
     
     def is_connected(self) -> bool:
         """Checks if the device is connected
