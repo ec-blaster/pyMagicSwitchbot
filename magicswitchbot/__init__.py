@@ -23,6 +23,9 @@ DEFAULT_RETRY_TIMEOUT = 1
 '''Max seconds to wait before the connection is established''' 
 DEFAULT_CONNECT_TIMEOUT = 3
 
+'''Max seconds to wait before the device sends back the response to a command'''
+NOTIFY_TIMEOUT = 5
+
 NO_TIMEOUT = -1
 
 _LOGGER = logging.getLogger(__name__)
@@ -532,20 +535,29 @@ class MagicSwitchbotDevice:
                         ''' Wait for a response'''
                         
                         _LOGGER.debug("MagicSwitchbot[%s] Waiting for notifications...", self._mac)
-                        
+                        received = False
+                        start_time = time.time()
                         while not self._delegate.hasData():
+                            elapsed_time = time.time() - start_time
                             if self._device.waitForNotifications(1.0):
+                                received = True
                                 continue
+                            if elapsed_time >= NOTIFY_TIMEOUT:
+                                continue
+                                
                             _LOGGER.debug("MagicSwitchbot[%s] Waiting...", self._mac)
                         
-                        encrypted_response = self._delegate.getData()
-                        _LOGGER.debug("MagicSwitchbot[%s] Encrypted data received: %s", self._mac, encrypted_response)
-                        
-                        plain_response = self._decrypt(encrypted_response)
-                        _LOGGER.debug("MagicSwitchbot[%s] Unencrypted result: %s", self._mac, plain_response)
-                        resp_success = self._processResponse(plain_response)
+                        if received:
+                            encrypted_response = self._delegate.getData()
+                            _LOGGER.debug("MagicSwitchbot[%s] Encrypted data received: %s", self._mac, encrypted_response)
+                            
+                            plain_response = self._decrypt(encrypted_response)
+                            _LOGGER.debug("MagicSwitchbot[%s] Unencrypted result: %s", self._mac, plain_response)
+                            resp_success = self._processResponse(plain_response)
+                        else:
+                            _LOGGER.error("MagicSwitchbot[%s] No response received in %d seconds ", self._mac, NOTIFY_TIMEOUT)
                 except btle.BTLEException as e:
-                    _LOGGER.warning("MagicSwitchbot[%s] Communication error: %s", self._mac, str(e))
+                    _LOGGER.warn("MagicSwitchbot[%s] Communication error: %s", self._mac, str(e))
                     self._disconnect()
                     
                 if resp_success:
