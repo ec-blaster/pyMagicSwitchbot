@@ -297,6 +297,9 @@ class MagicSwitchbotDevice:
             except btle.BTLEException:
                 _LOGGER.error("MagicSwitchbot[%s] Failed to connect to device", self._mac, exc_info=True)
                 self._device = None
+            except Exception:
+                _LOGGER.error("MagicSwitchbot[%s] Error getting device info", self._mac, exc_info=True)
+                self._device = None
             
             if connected:
                 return True
@@ -378,7 +381,10 @@ class MagicSwitchbotDevice:
             for i in range (self._retry_count):
                 try:
                     '''We get the current connection state using an undocumented method from Peripheral'''
-                    conn_status = self._device.getState()
+                    if self._device is not None:
+                        conn_status = self._device.getState()
+                    else:
+                        conn_status = ""
                 except Exception as e:
                     _LOGGER.warn("MagicSwitchbot[%s] %s when checking connection state (%d of %d attempts)", self._mac, str(e), i + 1, self._retry_count)
                     
@@ -387,7 +393,8 @@ class MagicSwitchbotDevice:
                         time.sleep(0.5)
                     else:
                         '''We have an unknown state. Let's disconnect'''
-                        self._device.disconnect()
+                        if self._device is not None:
+                            self._device.disconnect()
                         self._token = None
                         self._device = None
             connected = (conn_status == "conn")
