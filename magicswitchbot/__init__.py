@@ -12,7 +12,6 @@ import random
 from bluepy import btle
 from Crypto.Cipher import AES
 from threading import Timer
-from homeassistant.components.websocket_api.error import Disconnect
 
 '''How many times we will retry in case of error'''
 DEFAULT_RETRY_COUNT = 3
