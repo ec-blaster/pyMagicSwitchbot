@@ -10,7 +10,7 @@ setup(
     name='pyMagicSwitchbot',
     packages=['magicswitchbot'],
     install_requires=['bluepy', 'pycryptodome'],
-    version='1.0.12',
+    version='1.0.13',
     description='Library to control Magic Switchbot devices',
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -18,7 +18,7 @@ setup(
     url='https://github.com/ec-blaster/pyMagicSwitchbot',
     license='MIT',
     classifiers=[
-        'Development Status :: 3 - Alpha',
+        'Development Status :: 4 - Beta',
         'Environment :: Other Environment',
         'Intended Audience :: Developers',
         'Operating System :: POSIX :: Linux',
