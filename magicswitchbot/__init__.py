@@ -12,6 +12,7 @@ import random
 from bluepy import btle
 from Crypto.Cipher import AES
 from threading import Timer
+from binascii import hexlify
 
 '''How many times we will retry in case of error'''
 DEFAULT_RETRY_COUNT = 3
@@ -594,7 +595,24 @@ class MagicSwitchbotDevice:
             bool
                 Returns true if password is correct
         """
-        return self._sendCommand(self.CMD_GETTOKEN, "" if self._password is None else self._password, self._retry_count)
+        return self._sendCommand(self.CMD_GETTOKEN, "" if self._password is None else self._passwordToHex(self._password), self._retry_count)
+    
+    def _passwordToHex(self, password):
+        """Converts password to Hex
+        
+        Converts the supplied password to an hexadecimal string
+        
+        Parameters
+        ----------
+            password : str
+                Plain text password
+                
+        Return
+        ------
+            str
+                Password encoded in hexadecimal
+        """
+        return hexlify(password.encode()).decode()
         
     def _processResponse(self, response) -> bool:
         """Process the response from the device
@@ -633,7 +651,7 @@ class MagicSwitchbotDevice:
                 _LOGGER.info("MagicSwitchbot[%s] Chip type: %s, Firmware version: %d.%d, Device type: %s, Password enabled: %s", self._mac, chip_type, ver_major, ver_minor, dev_type, en_pwd)
                 success = True
             else:
-                _LOGGER.error("MagicSwitchbot[%s] Error retrieving token", self._mac)
+                _LOGGER.error("MagicSwitchbot[%s] Error retrieving token. Please check password", self._mac)
         elif command == self.CMD_GETBAT[0:2]:
             if ret_code == self.RC_GETBAT and param.upper() != "FF":
                 self._battery = int("0x" + param, 16)

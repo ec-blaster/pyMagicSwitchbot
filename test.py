@@ -15,8 +15,9 @@ import time, logging
 logging.basicConfig(level=logging.DEBUG)
 
 MAC = "00:11:22:33:44:55"
+PASSWORD = None
 
-device = MagicSwitchbot(mac=MAC, connect_timeout=15, disconnect_timeout=10)
+device = MagicSwitchbot(mac=MAC, connect_timeout=15, disconnect_timeout=10, password=PASSWORD)
 
 print(f"Connecting to MagicSwitchbot device at {MAC}...")
 res = device.get_battery()
