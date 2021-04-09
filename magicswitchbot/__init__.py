@@ -361,7 +361,7 @@ class MagicSwitchbotDevice:
             self._device.disconnect()
             _LOGGER.info("MagicSwitchbot[%s] Client disconnected", self._mac)
             self._token = None
-        except btle.BTLEException as e:
+        except Exception as e:
             _LOGGER.warning("MagicSwitchbot[%s] Error disconnecting: %s", self._mac, str(e))
         finally:
             self._device = None
@@ -563,7 +563,7 @@ class MagicSwitchbotDevice:
                             resp_success = self._processResponse(plain_response)
                         else:
                             _LOGGER.error("MagicSwitchbot[%s] No response received in %d seconds ", self._mac, NOTIFY_TIMEOUT)
-                except btle.BTLEException as e:
+                except Exception as e:
                     _LOGGER.warn("MagicSwitchbot[%s] Communication error: %s", self._mac, str(e))
                     self._disconnect()
                     
