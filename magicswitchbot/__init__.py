@@ -383,6 +383,7 @@ class MagicSwitchbotDevice:
                     '''We get the current connection state using an undocumented method from Peripheral'''
                     if self._device is not None:
                         conn_status = self._device.getState()
+                        break
                     else:
                         conn_status = ""
                 except Exception as e:
