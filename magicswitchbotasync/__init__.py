@@ -1,5 +1,7 @@
 import asyncio, logging
-from bleak import BleakClient
+import bleak
+from bleak_retry_connector import BleakClient, establish_connection
+
 
 '''How many times we will retry in case of error'''
 DEFAULT_RETRY_COUNT = 3
