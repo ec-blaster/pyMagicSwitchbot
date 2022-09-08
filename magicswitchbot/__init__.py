@@ -13,6 +13,7 @@ from bluepy import btle
 from Crypto.Cipher import AES
 from threading import Timer
 from binascii import hexlify
+from pip._internal.utils.deprecation import deprecated
 
 '''How many times we will retry in case of error'''
 DEFAULT_RETRY_COUNT = 3
@@ -152,7 +153,7 @@ class MagicSwitchbotDelegate (btle.DefaultDelegate):
             _LOGGER.debug("MagicSwitchbot[%s] Received data from device at unexpected handle %d: %s", self._mac, cHandle, data)
             btle.DefaultDelegate.handleNotification(self, cHandle, data)
 
-
+@deprecated
 class MagicSwitchbotDevice:
     """Base Representation of a MagicSwitchbot Device."""
 
@@ -670,6 +671,7 @@ class MagicSwitchbotDevice:
         return success 
 
 
+@deprecated
 class MagicSwitchbot(MagicSwitchbotDevice):
     """Representation of a MagicSwitchbot."""
     

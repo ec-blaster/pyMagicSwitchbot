@@ -1,10 +1,8 @@
 import asyncio
-import binascii
 import logging
-from enum import Enum
 from typing import Any, Callable
 from uuid import UUID
-from dataclasses import dataclass
+from binascii import hexlify
 
 import async_timeout
 from bleak import BleakError
@@ -18,34 +16,41 @@ from bleak_retry_connector import (
     establish_connection,
 )
 
-from .const import DEFAULT_RETRY_COUNT, DEFAULT_SCAN_TIMEOUT
+from .models import MagicSwitchbotAdvertisement
+from .const import (
+  DEFAULT_RETRY_COUNT,
+  DEFAULT_SCAN_TIMEOUT,
+  DISCONNECT_DELAY,
+  UUID_USERREAD_CHAR,
+  UUID_USERWRITE_CHAR
+)
 
 _LOGGER = logging.getLogger(__name__)
 
 BLEAK_EXCEPTIONS = (AttributeError, BleakError, asyncio.exceptions.TimeoutError)
 
-@dataclass
-class MagicSwitchBotAdvertisement:
-    """MagicSwitchbot advertisement."""
+    
+class CharacteristicMissingError(Exception):
+    """Custom exception raised when a characteristic is missing."""
+    
+class MagicSwitchbotOperationError(Exception):
+    """Custom exception raised when an operation fails."""
 
-    address: str
-    data: dict[str, Any]
-    device: BLEDevice
 
-class MagicSwitchbotBaseDevice:
-    """Base Representation of a MagicSwitchbot Device."""
+class MagicSwitchbotDevice:
+    """Base representation of a MagicSwitchbot device."""
 
     def __init__(
         self,
         device: BLEDevice,
-        password: str | None = None,
-        interface: int = 0,
+        password: str | None=None,
+        interface: int=0,
         **kwargs: Any,
     ) -> None:
         """MagicSwitchbot base class constructor."""
         self._interface = f"hci{interface}"
         self._device = device
-        self._sb_adv_data: MagicSwitchBotAdvertisement | None = None
+        self._sb_adv_data: MagicSwitchbotAdvertisement | None = None
         self._override_adv_data: dict[str, Any] | None = None
         self._scan_timeout: int = kwargs.pop("scan_timeout", DEFAULT_SCAN_TIMEOUT)
         self._retry_count: int = kwargs.pop("retry_count", DEFAULT_RETRY_COUNT)
@@ -54,9 +59,7 @@ class MagicSwitchbotBaseDevice:
         if password is None or password == "":
             self._password_encoded = None
         else:
-            self._password_encoded = "%08x" % (
-                binascii.crc32(password.encode("ascii")) & 0xFFFFFFFF
-            )
+            self._password_encoded = self._passwordToHex(password)
         self._client: BleakClientWithServiceCache | None = None
         self._cached_services: BleakGATTServiceCollection | None = None
         self._read_char: BleakGATTCharacteristic | None = None
@@ -74,7 +77,7 @@ class MagicSwitchbotBaseDevice:
         key_suffix = key[4:]
         return KEY_PASSWORD_PREFIX + key_action + self._password_encoded + key_suffix
 
-    async def _send_command(self, key: str, retry: int | None = None) -> bytes | None:
+    async def _send_command(self, key: str, retry: int | None=None) -> bytes | None:
         """Send command to device and read response."""
         if retry is None:
             retry = self._retry_count
@@ -142,16 +145,16 @@ class MagicSwitchbotBaseDevice:
 
     @property
     def name(self) -> str:
-        """Return device name."""
+        """Returns the device name."""
         return f"{self._device.name} ({self._device.address})"
 
     @property
     def rssi(self) -> int:
-        """Return RSSI of device."""
+        """Returns the RSSI of the device."""
         return self._get_adv_value("rssi")
 
     async def _ensure_connected(self):
-        """Ensure connection to device is established."""
+        """Ensure connection to the device is established."""
         if self._connect_lock.locked():
             _LOGGER.debug(
                 "%s: Connection already in progress, waiting for it to complete; RSSI: %s",
@@ -185,9 +188,9 @@ class MagicSwitchbotBaseDevice:
             self._reset_disconnect_timer()
 
     def _resolve_characteristics(self, services: BleakGATTServiceCollection) -> bool:
-        """Resolve characteristics."""
-        self._read_char = services.get_characteristic(READ_CHAR_UUID)
-        self._write_char = services.get_characteristic(WRITE_CHAR_UUID)
+        """Initialize characteristics handles to the device"""
+        self._read_char = services.get_characteristic(UUID_USERREAD_CHAR)
+        self._write_char = services.get_characteristic(UUID_USERWRITE_CHAR)
         return bool(self._read_char and self._write_char)
 
     def _reset_disconnect_timer(self):
@@ -213,7 +216,7 @@ class MagicSwitchbotBaseDevice:
         )
 
     def _disconnect(self):
-        """Disconnect from device."""
+        """Disconnects from the device."""
         self._disconnect_timer = None
         asyncio.create_task(self._execute_timed_disconnect())
 
@@ -238,7 +241,7 @@ class MagicSwitchbotBaseDevice:
                 await client.disconnect()
 
     async def _send_command_locked(self, key: str, command: bytes) -> bytes:
-        """Send command to device and read response."""
+        """Sends a command to the device and reads the response."""
         await self._ensure_connected()
         try:
             return await self._execute_command_locked(key, command)
@@ -263,12 +266,12 @@ class MagicSwitchbotBaseDevice:
             raise
 
     async def _execute_command_locked(self, key: str, command: bytes) -> bytes:
-        """Execute command and read response."""
+        """Executes the command and reads the response."""
         assert self._client is not None
         if not self._read_char:
-            raise CharacteristicMissingError(READ_CHAR_UUID)
+            raise CharacteristicMissingError(UUID_USERREAD_CHAR)
         if not self._write_char:
-            raise CharacteristicMissingError(WRITE_CHAR_UUID)
+            raise CharacteristicMissingError(UUID_USERWRITE_CHAR)
         future: asyncio.Future[bytearray] = asyncio.Future()
         client = self._client
 
@@ -299,11 +302,11 @@ class MagicSwitchbotBaseDevice:
         return notify_msg
 
     def get_address(self) -> str:
-        """Return address of device."""
+        """Returns the address of the device."""
         return self._device.address
 
     def _get_adv_value(self, key: str) -> Any:
-        """Return value from advertisement data."""
+        """Returns a value from the advertisement data."""
         if self._override_adv_data and key in self._override_adv_data:
             _LOGGER.debug(
                 "%s: Using override value for %s: %s",
@@ -317,11 +320,11 @@ class MagicSwitchbotBaseDevice:
         return self._sb_adv_data.data["data"].get(key)
 
     def get_battery_percent(self) -> Any:
-        """Return device battery level in percent."""
+        """Returns the device battery level in percent."""
         return self._get_adv_value("battery")
 
-    def update_from_advertisement(self, advertisement: MagicSwitchBotAdvertisement) -> None:
-        """Update device data from advertisement."""
+    def update_from_advertisement(self, advertisement: MagicSwitchbotAdvertisement) -> None:
+        """Updates the device data from advertisement."""
         # Only accept advertisements if the data is not missing
         # if we already have an advertisement with data
         if self._device and ble_device_has_changed(self._device, advertisement.device):
@@ -329,9 +332,9 @@ class MagicSwitchbotBaseDevice:
         self._device = advertisement.device
 
     async def get_device_data(
-        self, retry: int | None = None, interface: int | None = None
-    ) -> MagicSwitchBotAdvertisement | None:
-        """Find MagicSwitchbot devices and their advertisement data."""
+        self, retry: int | None=None, interface: int | None=None
+    ) -> MagicSwitchbotAdvertisement | None:
+        """Finds MagicSwitchbot devices and their advertisement data."""
         if retry is None:
             retry = self._retry_count
 
@@ -368,7 +371,7 @@ class MagicSwitchbotBaseDevice:
             callback()
 
     def subscribe(self, callback: Callable[[], None]) -> Callable[[], None]:
-        """Subscribe to device notifications."""
+        """Subscribes to the device notifications."""
         self._callbacks.append(callback)
 
         def _unsub() -> None:
@@ -391,7 +394,7 @@ class MagicSwitchbotBaseDevice:
             )
         return result[index] in values
 
-    def _set_advertisement_data(self, advertisement: MagicSwitchBotAdvertisement) -> None:
+    def _set_advertisement_data(self, advertisement: MagicSwitchbotAdvertisement) -> None:
         """Set advertisement data."""
         if advertisement.data.get("data") or not self._sb_adv_data.data.get("data"):
             self._sb_adv_data = advertisement
@@ -401,3 +404,20 @@ class MagicSwitchbotBaseDevice:
         """Return true or false from cache."""
         # To get actual position call update() first.
         return self._get_adv_value("switchMode")
+
+    def _passwordToHex(self, password):
+        """Converts password to Hex
+        
+        Converts the supplied password to an hexadecimal string
+        
+        Parameters
+        ----------
+            password : str
+                Plain text password
+                
+        Return
+        ------
+            str
+                Password encoded in hexadecimal
+        """
+        return hexlify(password.encode()).decode()
