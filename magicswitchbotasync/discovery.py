@@ -9,7 +9,6 @@ import bleak
 from bleak.backends.device import BLEDevice
 from bleak.backends.scanner import AdvertisementData
 
-from .adv_parser import parse_advertisement_data
 from .consts import DEFAULT_RETRY_COUNT, DEFAULT_RETRY_TIMEOUT, DEFAULT_SCAN_TIMEOUT
 from .models import MagicSwitchbotAdvertisement
 
@@ -69,7 +68,7 @@ class GetMagicSwitchbotDevices:
 
         return self._adv_data
 
-    async def _get_devices_by_model(
+    '''async def _get_devices_by_model(
         self,
         model: str,
     ) -> dict:
@@ -114,3 +113,4 @@ class GetMagicSwitchbotDevices:
             # MacOS uses UUIDs instead of MAC addresses
             if adv.data.get("address") == address
         }
+    '''

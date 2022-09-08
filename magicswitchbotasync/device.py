@@ -1,7 +1,16 @@
+"""
+Library to control MagicSwitchbot devices using BLEAK
+
+@author: ec-blaster
+@since: September 2022
+@license: MIT 
+"""
 import asyncio
 import logging
+import random
 from typing import Any, Callable
 from binascii import hexlify
+from Crypto.Cipher import AES
 
 import async_timeout
 from bleak import BleakError
@@ -16,13 +25,7 @@ from bleak_retry_connector import (
 )
 
 from .models import MagicSwitchbotAdvertisement
-from .consts import (
-  DEFAULT_RETRY_COUNT,
-  DEFAULT_SCAN_TIMEOUT,
-  DISCONNECT_DELAY,
-  UUID_USERREAD_CHAR,
-  UUID_USERWRITE_CHAR
-)
+from .consts import *
 from .discovery import GetMagicSwitchbotDevices
 
 _LOGGER = logging.getLogger(__name__)
@@ -68,21 +71,40 @@ class MagicSwitchbotDevice:
         self._expected_disconnect = False
         self.loop = asyncio.get_event_loop()
         self._callbacks: list[Callable[[], None]] = []
+        self._token = None
 
-    def _commandkey(self, key: str) -> str:
+    '''def _commandkey(self, key: str) -> str:
         """Add password to key if set."""
         if self._password_encoded is None:
             return key
         key_action = key[3]
         key_suffix = key[4:]
         return KEY_PASSWORD_PREFIX + key_action + self._password_encoded + key_suffix
+    '''
+      
+    async def _sendCommand(self, command: str, parameter: str, retries: int | None=None) -> bytes | None:
+        """Sends a command to the device and waits for its response
+        
+        This method sends a command to the device via BLE, waiting and processing an execution response
+        
+        Parameters
+        ----------
+            command: str
+                Hexadecimal string with 2 bytes for the command (and subcommand) to execute
+            parameter: str
+                Hexadecimal string with 1 or more bytes as a parameter to the command
+            retries : int
+                Number of times that the connection will be retried in case of error
 
-    async def _send_command(self, key: str, retry: int | None=None) -> bytes | None:
-        """Send command to device and read response."""
-        if retry is None:
-            retry = self._retry_count
-        command = bytearray.fromhex(self._commandkey(key))
-        _LOGGER.debug("%s: Sending command %s", self.name, command)
+        Returns
+        -------
+            bytes
+                Returns a response to the command
+        """
+        if retries is None:
+            retries = self._retry_count
+        
+        _LOGGER.debug("%s: Sending command %s with parameter %s", self.name, command, parameter)
         if self._operation_lock.locked():
             _LOGGER.debug(
                 "%s: Operation already in progress, waiting for it to complete; RSSI: %s",
@@ -90,7 +112,7 @@ class MagicSwitchbotDevice:
                 self.rssi,
             )
 
-        max_attempts = retry + 1
+        max_attempts = retries + 1
         if self._operation_lock.locked():
             _LOGGER.debug(
                 "%s: Operation already in progress, waiting for it to complete; RSSI: %s",
@@ -100,7 +122,8 @@ class MagicSwitchbotDevice:
         async with self._operation_lock:
             for attempt in range(max_attempts):
                 try:
-                    return await self._send_command_locked(key, command)
+                    encrypted_command = self._prepareCommand(command, parameter)
+                    return await self._send_command_locked(encrypted_command)
                 except BleakNotFoundError:
                     _LOGGER.error(
                         "%s: device not found, no longer in range, or poor RSSI: %s",
@@ -110,7 +133,7 @@ class MagicSwitchbotDevice:
                     )
                     return None
                 except CharacteristicMissingError as ex:
-                    if attempt == retry:
+                    if attempt == retries:
                         _LOGGER.error(
                             "%s: characteristic missing: %s; Stopping trying; RSSI: %s",
                             self.name,
@@ -128,7 +151,7 @@ class MagicSwitchbotDevice:
                         exc_info=True,
                     )
                 except BLEAK_EXCEPTIONS:
-                    if attempt == retry:
+                    if attempt == retries:
                         _LOGGER.error(
                             "%s: communication failed; Stopping trying; RSSI: %s",
                             self.name,
@@ -240,11 +263,11 @@ class MagicSwitchbotDevice:
             if client and client.is_connected:
                 await client.disconnect()
 
-    async def _send_command_locked(self, key: str, command: bytes) -> bytes:
-        """Sends a command to the device and reads the response."""
+    async def _send_command_locked(self, command: bytes) -> bytes:
+        """Sends an encrypted command to the device and reads the response."""
         await self._ensure_connected()
         try:
-            return await self._execute_command_locked(key, command)
+            return await self._execute_command_locked(command)
         except BleakDBusError as ex:
             # Disconnect so we can reset state and try again
             await asyncio.sleep(0.25)
@@ -265,7 +288,7 @@ class MagicSwitchbotDevice:
             await self._execute_disconnect()
             raise
 
-    async def _execute_command_locked(self, key: str, command: bytes) -> bytes:
+    async def _execute_command_locked(self, command: bytes) -> bytes:
         """Executes the command and reads the response."""
         assert self._client is not None
         if not self._read_char:
@@ -276,7 +299,7 @@ class MagicSwitchbotDevice:
         client = self._client
 
         def _notification_handler(_sender: int, data: bytearray) -> None:
-            """Handle notification responses."""
+            """Internal routine to handle BLE notification responses."""
             if future.done():
                 _LOGGER.debug("%s: Notification handler already done", self.name)
                 return
@@ -285,7 +308,7 @@ class MagicSwitchbotDevice:
         _LOGGER.debug("%s: Subscribe to notifications; RSSI: %s", self.name, self.rssi)
         await client.start_notify(self._read_char, _notification_handler)
 
-        _LOGGER.debug("%s: Sending command: %s", self.name, key)
+        _LOGGER.debug("%s: Sending command: %s", self.name, command)
         await client.write_gatt_char(self._write_char, command, False)
 
         async with async_timeout.timeout(5):
@@ -352,7 +375,7 @@ class MagicSwitchbotDevice:
 
         return self._sb_adv_data
 
-    async def _get_basic_info(self) -> bytes | None:
+    '''async def _get_basic_info(self) -> bytes | None:
         """Return basic info of device."""
         _data = await self._send_command(
             key=DEVICE_GET_BASIC_SETTINGS_KEY, retry=self._retry_count
@@ -362,7 +385,7 @@ class MagicSwitchbotDevice:
             _LOGGER.error("Unsuccessful, please try again")
             return None
 
-        return _data
+        return _data'''
 
     def _fire_callbacks(self) -> None:
         """Fire callbacks."""
@@ -421,3 +444,75 @@ class MagicSwitchbotDevice:
                 Password encoded in hexadecimal
         """
         return hexlify(password.encode()).decode()
+      
+    def _encrypt(self, data) -> str:
+        """Encrypts data using AES128 ECB
+        Parameters
+        ----------
+            data : str
+                Hexadecimal representation of the data to encrypt
+
+        Returns
+        -------
+            str
+                Hexadecimal representation of encrypted data
+        """
+        cipher = AES.new(bytes(bytearray(CRYPT_KEY)), AES.MODE_ECB)
+        encrypted = cipher.encrypt(bytes.fromhex(data)).hex()
+        return encrypted
+      
+    def _decrypt(self, data) -> str:
+        """Decrypts data using AES128 ECB
+        Parameters
+        ----------
+            data : str
+                Hexadecimal representation of the data to decrypt
+
+        Returns
+        -------
+            str
+                Hexadecimal representation of decrypted data
+        """
+        
+        '''We need a byte string as the key to decrypt or encrypt'''
+        decipher = AES.new(bytes(bytearray(CRYPT_KEY)), AES.MODE_ECB)
+        return decipher.decrypt(bytes.fromhex(data)).hex()
+    
+    def _prepareCommand(self, command, parameter):
+        """Prepare the command to send to the device
+        
+        Prepares an encrypted string based on a command and a parameter to send to the MagicSwitchBot device
+        
+        Parameters
+        ----------
+            command : str
+                Hexadecimal representation of the command to send (usually 2 hex bytes, len 4)
+            parameter: str
+                Hexadecimal representation of the parameter(s) to send (variable length)
+
+        Returns
+        -------
+            str
+                Hexadecimal representation of the 16 encrypted bytes to send to the device
+        """
+        
+        '''Hex form of the parameter length:'''
+        parmLen = "{:02X}".format(int(len(parameter) / 2))
+        
+        if self._token is None:
+            tok = ""
+        else:
+            tok = self._token
+
+        '''
+        We calculate how long must be the random tail of the command.
+        Each hex byte has a length of 2 characters, so the complete payload has 32 chars. The length byte also counts
+        '''
+        rndLen = 32 - len(command) - len(parameter) - len(tok) - 2
+        rndTail = ''.join([str(y) for _ in range(rndLen) for y in random.choice('0123456789abcdef')])
+        
+        fullCommand = command + parmLen + parameter + tok + rndTail
+        
+        _LOGGER.info("MagicSwitchbot[%s] Sending %s command: %s", self._device.address, COMMANDS[command], fullCommand)
+
+        return self._encrypt(fullCommand)
