@@ -12,24 +12,50 @@ IMPORTANT: hcitool and python is not allowed to access bluetooth stack unless th
 from magicswitchbotasync import MagicSwitchbot
 import time, logging, asyncio
 from bleak.backends.device import BLEDevice
+from bleak import BleakClient
 
 logging.basicConfig(level=logging.DEBUG)
 
 MAC = "00:11:22:33:44:55"
 MAC = "fc:45:c3:75:c9:ae"
 PASSWORD = None
+MODEL_NBR_UUID = "00002a24-0000-1000-8000-00805f9b34fb"
+
 
 async def main():
-  ble_device = BLEDevice(MAC, "any")
-  
-  device = MagicSwitchbot(ble_device)
-  #device = MagicSwitchbot(mac=MAC, connect_timeout=15, disconnect_timeout=10, password=PASSWORD)
-  
   print(f"Connecting to MagicSwitchbot device at {MAC}...")
-  
+  device = MagicSwitchbot(MAC)
+  print("Turning on...")
   await device.turn_on()
   
+  '''client = BleakClient(MAC, timeout=3)
+  try:
+    print(f"Connecting to MagicSwitchbot device at {MAC}...")
+    #await client.connect()
+    
+    #print("Connection succesfull")
+    di = client._device_info
+    ble_device = BLEDevice(address=MAC,
+                           name=di["Name"],
+                           rssi=di["RSSI"],
+                           details={
+                             "path": di["Adapter"]
+                           }
+    )
+    await client.disconnect()
+    
+    device = MagicSwitchbot(ble_device)
+    
+    
+    
+
+  except Exception as e:
+      print(e)
+  finally:
+      await client.disconnect()'''
+  
   print("Testing finished")
+
 
 asyncio.run(main())
 
