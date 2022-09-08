@@ -10,18 +10,18 @@ from bleak.backends.device import BLEDevice
 from bleak.backends.scanner import AdvertisementData
 
 from .adv_parser import parse_advertisement_data
-from .const import DEFAULT_RETRY_COUNT, DEFAULT_RETRY_TIMEOUT, DEFAULT_SCAN_TIMEOUT
+from .consts import DEFAULT_RETRY_COUNT, DEFAULT_RETRY_TIMEOUT, DEFAULT_SCAN_TIMEOUT
 from .models import MagicSwitchbotAdvertisement
 
 _LOGGER = logging.getLogger(__name__)
 CONNECT_LOCK = asyncio.Lock()
 
 
-class GetSwitchbotDevices:
-    """Scan for all Switchbot devices and return by type."""
+class GetMagicSwitchbotDevices:
+    """Scan for all MagicSwitchbot devices and return by type."""
 
     def __init__(self, interface: int=0) -> None:
-        """Get switchbot devices class constructor."""
+        """Get MagicSwitchbot devices class constructor."""
         self._interface = f"hci{interface}"
         self._adv_data: dict[str, MagicSwitchbotAdvertisement] = {}
 
@@ -38,7 +38,7 @@ class GetSwitchbotDevices:
     async def discover(
         self, retry: int=DEFAULT_RETRY_COUNT, scan_timeout: int=DEFAULT_SCAN_TIMEOUT
     ) -> dict:
-        """Find switchbot devices and their advertisement data."""
+        """Find MagicSwitchbot devices and their advertisement data."""
 
         devices = None
         devices = bleak.BleakScanner(
@@ -56,12 +56,12 @@ class GetSwitchbotDevices:
         if devices is None:
             if retry < 1:
                 _LOGGER.error(
-                    "Scanning for Switchbot devices failed. Stop trying", exc_info=True
+                    "Scanning for MagicSwitchbot devices failed. Stop trying", exc_info=True
                 )
                 return self._adv_data
 
             _LOGGER.warning(
-                "Error scanning for Switchbot devices. Retrying (remaining: %d)",
+                "Error scanning for MagicSwitchbot devices. Retrying (remaining: %d)",
                 retry,
             )
             await asyncio.sleep(DEFAULT_RETRY_TIMEOUT)
@@ -73,7 +73,7 @@ class GetSwitchbotDevices:
         self,
         model: str,
     ) -> dict:
-        """Get switchbot devices by type."""
+        """Get MagicSwitchbot devices by type."""
         if not self._adv_data:
             await self.discover()
 

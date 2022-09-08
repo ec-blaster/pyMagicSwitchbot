@@ -9,7 +9,7 @@ IMPORTANT: hcitool and python is not allowed to access bluetooth stack unless th
             sudo setcap 'cap_net_raw+ep' $(readlink -f $(which hcitool))
 '''
 
-from magicswitchbot import MagicSwitchbot
+from magicswitchbotasync import MagicSwitchbot
 import time, logging
 
 logging.basicConfig(level=logging.DEBUG)

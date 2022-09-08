@@ -1,7 +1,6 @@
 import asyncio
 import logging
 from typing import Any, Callable
-from uuid import UUID
 from binascii import hexlify
 
 import async_timeout
@@ -17,13 +16,14 @@ from bleak_retry_connector import (
 )
 
 from .models import MagicSwitchbotAdvertisement
-from .const import (
+from .consts import (
   DEFAULT_RETRY_COUNT,
   DEFAULT_SCAN_TIMEOUT,
   DISCONNECT_DELAY,
   UUID_USERREAD_CHAR,
   UUID_USERWRITE_CHAR
 )
+from .discovery import GetMagicSwitchbotDevices
 
 _LOGGER = logging.getLogger(__name__)
 
