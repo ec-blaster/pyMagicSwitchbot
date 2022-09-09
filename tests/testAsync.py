@@ -27,13 +27,15 @@ async def main():
     
     ble_device = await BleakScanner.find_device_by_address(MAC, timeout=20)
     
-    if ble_device is not None:
+    if not ble_device:
+      print(f"Couldn't find a BLE device with address {MAC}")
+    else:
+      print (ble_device)
+      #await BleakScanner.stop()
       device = MagicSwitchbot(ble_device)
       
       print("Turning on...")
       await device.turn_on()
-    else:
-      print(f"No se ha podido encontrar un dispositivo con la mac {MAC}")
     
   except Exception as e:
     print(e)

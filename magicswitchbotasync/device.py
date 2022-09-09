@@ -35,6 +35,7 @@ BLEAK_EXCEPTIONS = (AttributeError, BleakError, asyncio.exceptions.TimeoutError)
     
 class CharacteristicMissingError(Exception):
     """Custom exception raised when a characteristic is missing."""
+
     
 class MagicSwitchbotOperationError(Exception):
     """Custom exception raised when an operation fails."""
@@ -60,7 +61,7 @@ class MagicSwitchbotDevice:
         self._connect_lock = asyncio.Lock()
         self._operation_lock = asyncio.Lock()
         if password is None or password == "":
-            self._password_encoded = None
+            self._password_encoded = ""
         else:
             self._password_encoded = self._passwordToHex(password)
         self._client: BleakClientWithServiceCache | None = None
@@ -104,65 +105,76 @@ class MagicSwitchbotDevice:
         if retries is None:
             retries = self._retry_count
         
-        _LOGGER.debug("%s: Sending command %s with parameter %s", self.name, command, parameter)
-        if self._operation_lock.locked():
-            _LOGGER.debug(
-                "%s: Operation already in progress, waiting for it to complete; RSSI: %s",
-                self.name,
-                self.rssi,
-            )
-
-        max_attempts = retries + 1
-        if self._operation_lock.locked():
-            _LOGGER.debug(
-                "%s: Operation already in progress, waiting for it to complete; RSSI: %s",
-                self.name,
-                self.rssi,
-            )
-        async with self._operation_lock:
-            for attempt in range(max_attempts):
-                try:
-                    encrypted_command = self._prepareCommand(command, parameter)
-                    return await self._send_command_locked(encrypted_command)
-                except BleakNotFoundError:
-                    _LOGGER.error(
-                        "%s: device not found, no longer in range, or poor RSSI: %s",
-                        self.name,
-                        self.rssi,
-                        exc_info=True,
-                    )
-                    return None
-                except CharacteristicMissingError as ex:
-                    if attempt == retries:
-                        _LOGGER.error(
-                            "%s: characteristic missing: %s; Stopping trying; RSSI: %s",
-                            self.name,
-                            ex,
-                            self.rssi,
-                            exc_info=True,
-                        )
-                        return None
-
-                    _LOGGER.debug(
-                        "%s: characteristic missing: %s; RSSI: %s",
-                        self.name,
-                        ex,
-                        self.rssi,
-                        exc_info=True,
-                    )
-                except BLEAK_EXCEPTIONS:
-                    if attempt == retries:
-                        _LOGGER.error(
-                            "%s: communication failed; Stopping trying; RSSI: %s",
-                            self.name,
-                            self.rssi,
-                            exc_info=True,
-                        )
-                        return None
-
-                    _LOGGER.debug(
-                        "%s: communication failed with:", self.name, exc_info=True
-                    )
+        _LOGGER.debug("%s: Sending command %s with parameter %s and %d retries", self.name, command, parameter, retries)
+        
+        '''First of all we check if there is a token to retrieve'''
+        if command != CMD_GETTOKEN and self._token is None:
+            '''If the command is NOT GETTOKEN, we'll issue a GETOTKEN command before sending the actual command'''
+            _LOGGER.debug("The device hasn't got a token yet. Let's get one...")
+            go = await self._auth()
+        else:
+            go = True
+            
+        if go:
+          if self._operation_lock.locked():
+              _LOGGER.debug(
+                  "%s: Operation already in progress, waiting for it to complete; RSSI: %s",
+                  self.name,
+                  self.rssi,
+              )
+  
+          max_attempts = retries
+          if self._operation_lock.locked():
+              _LOGGER.debug(
+                  "%s: Operation already in progress, waiting for it to complete; RSSI: %s",
+                  self.name,
+                  self.rssi,
+              )
+          async with self._operation_lock:
+              for attempt in range(max_attempts):
+                  try:
+                      _LOGGER.debug("Attempt #%d:", attempt + 1)
+                      encrypted_command = self._prepareCommand(command, parameter)
+                      return await self._send_command_locked(encrypted_command)
+                  except BleakNotFoundError:
+                      _LOGGER.error(
+                          "%s: device not found, no longer in range, or poor RSSI: %s",
+                          self.name,
+                          self.rssi,
+                          exc_info=True,
+                      )
+                      return None
+                  except CharacteristicMissingError as ex:
+                      if attempt == retries:
+                          _LOGGER.error(
+                              "%s: characteristic missing: %s; Stopping trying; RSSI: %s",
+                              self.name,
+                              ex,
+                              self.rssi,
+                              exc_info=True,
+                          )
+                          return None
+  
+                      _LOGGER.debug(
+                          "%s: characteristic missing: %s; RSSI: %s",
+                          self.name,
+                          ex,
+                          self.rssi,
+                          exc_info=True,
+                      )
+                  except BLEAK_EXCEPTIONS:
+                      if attempt == retries:
+                          _LOGGER.error(
+                              "%s: communication failed; Stopping trying; RSSI: %s",
+                              self.name,
+                              self.rssi,
+                              exc_info=True,
+                          )
+                          return None
+  
+                      _LOGGER.debug(
+                          "%s: communication failed with:", self.name, exc_info=True
+                      )
 
         raise RuntimeError("Unreachable")
 
@@ -309,7 +321,7 @@ class MagicSwitchbotDevice:
         await client.start_notify(self._read_char, _notification_handler)
 
         _LOGGER.debug("%s: Sending command: %s", self.name, command)
-        await client.write_gatt_char(self._write_char, command, False)
+        await client.write_gatt_char(self._write_char, command.encode("utf8"), False)
 
         async with async_timeout.timeout(5):
             notify_msg = await future
@@ -427,6 +439,20 @@ class MagicSwitchbotDevice:
         """Return true or false from cache."""
         # To get actual position call update() first.
         return self._get_adv_value("switchMode")
+      
+    async def _auth(self) -> bool:
+        """Validates the password set on the device
+        
+        Validates the password set on the device and gets the communication token.
+        The password we use is set on construct
+
+        Returns
+        -------
+            bool
+                Returns true if password is correct
+        """
+        '''The parameter that CMD_GETTOKEN expects is the encoded passwor or empty if not set''' 
+        return await self._sendCommand(CMD_GETTOKEN, self._password_encoded)
 
     def _passwordToHex(self, password):
         """Converts password to Hex
