@@ -11,8 +11,7 @@ IMPORTANT: hcitool and python is not allowed to access bluetooth stack unless th
 
 from magicswitchbotasync import MagicSwitchbot
 import time, logging, asyncio
-from bleak.backends.device import BLEDevice
-from bleak import BleakClient
+from bleak import BleakScanner
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -23,12 +22,29 @@ MODEL_NBR_UUID = "00002a24-0000-1000-8000-00805f9b34fb"
 
 
 async def main():
-  print(f"Connecting to MagicSwitchbot device at {MAC}...")
-  device = MagicSwitchbot(MAC)
-  print("Turning on...")
-  await device.turn_on()
+  try:
+    print(f"Connecting to MagicSwitchbot device at {MAC}...")
+    
+    ble_device = await BleakScanner.find_device_by_address(MAC, timeout=20)
+    
+    if ble_device is not None:
+      device = MagicSwitchbot(ble_device)
+      
+      print("Turning on...")
+      await device.turn_on()
+    else:
+      print(f"No se ha podido encontrar un dispositivo con la mac {MAC}")
+    
+  except Exception as e:
+    print(e)
+    
+  finally:
+    print("Testing finished")
+
+    
+asyncio.run(main())
   
-  '''client = BleakClient(MAC, timeout=3)
+'''client = BleakClient(MAC, timeout=3)
   try:
     print(f"Connecting to MagicSwitchbot device at {MAC}...")
     #await client.connect()
@@ -49,17 +65,12 @@ async def main():
     
     
 
-  except Exception as e:
-      print(e)
-  finally:
-      await client.disconnect()'''
   
-  print("Testing finished")
 
 
-asyncio.run(main())
 
-'''res = device.get_battery()
+
+res = device.get_battery()
 if res:
     print(f"Connected to MagicSwitchbot device at {MAC} with {res}% of battery remaining")
     time.sleep(1)
