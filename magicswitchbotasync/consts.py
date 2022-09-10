@@ -8,10 +8,9 @@ NOTIFY_TIMEOUT = 15 # Max seconds to wait before the device sends back the respo
 DISCONNECT_DELAY = 49  # How long to hold the connection to wait for additional commands before disconnecting the device.
 
 """Constants definition for BLE communication"""    
-UUID_SERVICE = "0000fee7-0000-1000-8000-00805f9b34fb"
+#UUID_SERVICE = "0000fee7-0000-1000-8000-00805f9b34fb"
 UUID_USERWRITE_CHAR = "000036f5-0000-1000-8000-00805f9b34fb"
 UUID_USERREAD_CHAR = "000036f6-0000-1000-8000-00805f9b34fb"
-UUID_NOTIFY_SET = "00002902-0000-1000-8000-00805f9b34fb"
 
 """Symmetric encryption key used for AES"""
 CRYPT_KEY = [42, 97, 57, 92, 64, 85, 73, 81, 58, 90, 75, 98, 27, 109, 55, 53]

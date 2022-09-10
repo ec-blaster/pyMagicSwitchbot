@@ -219,7 +219,6 @@ class MagicSwitchbotDevice:
     def _resolve_characteristics(self, services: BleakGATTServiceCollection) -> bool:
         """Initialize characteristics handles to the device"""
         self._read_char = services.get_characteristic(UUID_USERREAD_CHAR)
-        self._descriptor = self._read_char.get_descriptor(UUID_NOTIFY_SET)       
         self._write_char = services.get_characteristic(UUID_USERWRITE_CHAR)
         return bool(self._read_char and self._write_char)
 
@@ -312,18 +311,18 @@ class MagicSwitchbotDevice:
             if future.done():
                 _LOGGER.debug("%s: Notification handler already done", self.name)
                 return
-            future.set_result(data)
+              
+            if _sender == self._read_char.handle:
+              future.set_result(data)
+            else:
+              _LOGGER.debug("%s: The notification was not from our device", self.name)
 
-        # _LOGGER.debug("%s: Subscribe to notifications; RSSI: %s", self.name, self.rssi)
-        _LOGGER.debug("%s: Subscribe to notifications via descriptor %d; RSSI: %s", self.name, self._descriptor.handle, self.rssi)
-        # await client.write_gatt_descriptor(self._descriptor.handle, binascii.a2b_hex(CMD_ENNOTIF))
+        _LOGGER.debug("%s: Subscribe to notifications; RSSI: %s", self.name, self.rssi)
         await client.start_notify(self._read_char, _notification_handler)
         
-        result_start_notify = await client.read_gatt_descriptor(self._descriptor.handle)
-        _LOGGER.debug("%s: Status of config descriptor: %s", self.name, result_start_notify)
-
         _LOGGER.debug("%s: Sending command: %s", self.name, command)
-        await client.write_gatt_char(self._write_char, command.encode("utf8"), True)
+        await client.write_gatt_char(self._write_char, binascii.a2b_hex(command), True)
+
         _LOGGER.debug("%s: Waiting for notifications...", self.name)
 
         async with async_timeout.timeout(NOTIFY_TIMEOUT):
@@ -332,12 +331,11 @@ class MagicSwitchbotDevice:
 
         _LOGGER.debug("%s: UnSubscribe to notifications", self.name)
         await client.stop_notify(self._read_char)
-
-        if notify_msg == b"\x07":
-            _LOGGER.error("Password required")
-        elif notify_msg == b"\t":
-            _LOGGER.error("Password incorrect")
-        return notify_msg
+        
+        plain_response = self._decrypt(notify_msg.hex())
+        _LOGGER.debug("MagicSwitchbot[%s] Unencrypted result: %s", self._device.address, plain_response)
+        resp_success = self._processResponse(plain_response)
+        return plain_response
 
     def get_address(self) -> str:
         """Returns the address of the device."""
@@ -545,3 +543,57 @@ class MagicSwitchbotDevice:
         _LOGGER.info("MagicSwitchbot[%s] Sending %s command: %s", self._device.address, COMMANDS[command], fullCommand)
 
         return self._encrypt(fullCommand)
+
+    def _processResponse(self, response) -> bool:
+        """Process the response from the device
+      
+        This method processes the response that we receive from the device after
+        executing a command
+      
+        Parameters
+        ----------
+            response : str
+                Hexadecimal representation of the 16 byte response
+                
+        Return
+        ------
+            bool
+                Returns True if the command result is succesfull
+        """
+        success = False
+        command = response[0:2]
+        ret_code = response[2:4]
+        param_length = int(response[4:6])
+        param = response[6:(6 + 2 * param_length)]
+      
+        _LOGGER.info("MagicSwitchbot[%s] Response: (Command = %s, Return Code = %s, Length = %d, Params = %s)", self._device.address, command, ret_code, param_length, param)
+      
+        if command == CMD_GETTOKEN[0:2]:
+            if ret_code == RC_TOKENOK:
+                token = param[0:8]
+                chip_type = param[8:10]
+                ver_major = int(param[10:12])
+                ver_minor = int(param[12:14])
+                dev_type = param[14:16]
+                en_pwd = "False" if param[16:18] == '00' else "True"
+                self._token = token 
+                _LOGGER.info("MagicSwitchbot[%s] The current connection token is %s", self._device.address, token)
+                _LOGGER.info("MagicSwitchbot[%s] Chip type: %s, Firmware version: %d.%d, Device type: %s, Password enabled: %s", self._device.address, chip_type, ver_major, ver_minor, dev_type, en_pwd)
+                success = True
+            else:
+                _LOGGER.error("MagicSwitchbot[%s] Error retrieving token. Please check password", self._device.address)
+        elif command == CMD_GETBAT[0:2]:
+            if ret_code == RC_GETBAT and param.upper() != "FF":
+                self._battery = int("0x" + param, 16)
+                _LOGGER.info("MagicSwitchbot[%s] Battery level: %d%%", self._device.address, self._battery)
+                success = True
+            else:
+                self._battery = None
+        elif command == CMD_SWITCH[0:2]:
+            if ret_code == RC_SWITCH and param == STA_OK:
+                _LOGGER.info("MagicSwitchbot[%s] Switch state changed successfully", self._device.address)
+                success = True
+            else:
+                _LOGGER.error("MagicSwitchbot[%s] Error changing switch state", self._device.address)
+                
+        return success 
