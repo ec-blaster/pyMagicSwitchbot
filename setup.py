@@ -8,7 +8,7 @@ with open(path.join(this_directory, 'README.md'), encoding='utf-8') as f:
 
 setup(
     name='pyMagicSwitchbot',
-    packages=['magicswitchbot'],
+    packages=['magicswitchbot','magicswitchbotasync'],
     install_requires=['bluepy', 'pycryptodome'],
     version='1.1.0',
     description='Library to control Magic Switchbot devices',

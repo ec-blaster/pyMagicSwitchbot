@@ -1,13 +1,7 @@
-"""
-Library to control MagicSwitchbot devices using BLEAK
-
-@author: ec-blaster
-@since: September 2022
-@license: MIT 
-"""
 import asyncio
 import logging
 import random
+import binascii
 from typing import Any, Callable
 from binascii import hexlify
 from Crypto.Cipher import AES
@@ -176,7 +170,7 @@ class MagicSwitchbotDevice:
                           "%s: communication failed with:", self.name, exc_info=True
                       )
 
-        raise RuntimeError("Unreachable")
+          raise RuntimeError("Unreachable")
 
     @property
     def name(self) -> str:
@@ -225,6 +219,7 @@ class MagicSwitchbotDevice:
     def _resolve_characteristics(self, services: BleakGATTServiceCollection) -> bool:
         """Initialize characteristics handles to the device"""
         self._read_char = services.get_characteristic(UUID_USERREAD_CHAR)
+        self._descriptor = self._read_char.get_descriptor(UUID_NOTIFY_SET)       
         self._write_char = services.get_characteristic(UUID_USERWRITE_CHAR)
         return bool(self._read_char and self._write_char)
 
@@ -312,18 +307,26 @@ class MagicSwitchbotDevice:
 
         def _notification_handler(_sender: int, data: bytearray) -> None:
             """Internal routine to handle BLE notification responses."""
+            _LOGGER.info("%s: Notification received. Sender: %d, data: %s", self.name, _sender, data)
+            
             if future.done():
                 _LOGGER.debug("%s: Notification handler already done", self.name)
                 return
             future.set_result(data)
 
-        _LOGGER.debug("%s: Subscribe to notifications; RSSI: %s", self.name, self.rssi)
+        # _LOGGER.debug("%s: Subscribe to notifications; RSSI: %s", self.name, self.rssi)
+        _LOGGER.debug("%s: Subscribe to notifications via descriptor %d; RSSI: %s", self.name, self._descriptor.handle, self.rssi)
+        # await client.write_gatt_descriptor(self._descriptor.handle, binascii.a2b_hex(CMD_ENNOTIF))
         await client.start_notify(self._read_char, _notification_handler)
+        
+        result_start_notify = await client.read_gatt_descriptor(self._descriptor.handle)
+        _LOGGER.debug("%s: Status of config descriptor: %s", self.name, result_start_notify)
 
         _LOGGER.debug("%s: Sending command: %s", self.name, command)
-        await client.write_gatt_char(self._write_char, command.encode("utf8"), False)
+        await client.write_gatt_char(self._write_char, command.encode("utf8"), True)
+        _LOGGER.debug("%s: Waiting for notifications...", self.name)
 
-        async with async_timeout.timeout(5):
+        async with async_timeout.timeout(NOTIFY_TIMEOUT):
             notify_msg = await future
         _LOGGER.debug("%s: Notification received: %s", self.name, notify_msg)
 

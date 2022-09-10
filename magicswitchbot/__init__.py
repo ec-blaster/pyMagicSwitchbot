@@ -153,7 +153,6 @@ class MagicSwitchbotDelegate (btle.DefaultDelegate):
             _LOGGER.debug("MagicSwitchbot[%s] Received data from device at unexpected handle %d: %s", self._mac, cHandle, data)
             btle.DefaultDelegate.handleNotification(self, cHandle, data)
 
-@deprecated
 class MagicSwitchbotDevice:
     """Base Representation of a MagicSwitchbot Device."""
 
@@ -671,7 +670,6 @@ class MagicSwitchbotDevice:
         return success 
 
 
-@deprecated
 class MagicSwitchbot(MagicSwitchbotDevice):
     """Representation of a MagicSwitchbot."""
     

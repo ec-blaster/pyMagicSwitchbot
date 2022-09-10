@@ -1,3 +1,11 @@
+"""
+Library to control MagicSwitchbot devices using BLEAK
+
+@author: ec-blaster
+@since: September 2022
+@license: MIT 
+"""
+
 import asyncio, logging
 import bleak
 from bleak_retry_connector import BleakClient, establish_connection
