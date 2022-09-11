@@ -18,7 +18,7 @@ setup(
     url='https://github.com/ec-blaster/pyMagicSwitchbot',
     license='MIT',
     classifiers=[
-        'Development Status :: 4 - Beta',
+        'Development Status :: 3 - Alpha',
         'Environment :: Other Environment',
         'Intended Audience :: Developers',
         'Operating System :: POSIX :: Linux',
