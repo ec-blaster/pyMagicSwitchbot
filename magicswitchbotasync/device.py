@@ -107,6 +107,7 @@ class MagicSwitchbotDevice:
             _LOGGER.debug("The device hasn't got a token yet. Let's get one...")
             go = await self._auth()
         else:
+            _LOGGER.debug("We've got the token. Go on...")
             go = True
             
         if go:
@@ -329,8 +330,11 @@ class MagicSwitchbotDevice:
             notify_msg = await future
         _LOGGER.debug("%s: Notification received: %s", self.name, notify_msg)
 
-        _LOGGER.debug("%s: UnSubscribe to notifications", self.name)
+        _LOGGER.debug("%s: UnSubscribe from notifications", self.name)
         await client.stop_notify(self._read_char)
+        
+        '''This sleep is important. Otherwise, it will freeze on next start_notify'''
+        await asyncio.sleep(0.25)
         
         plain_response = self._decrypt(notify_msg.hex())
         _LOGGER.debug("MagicSwitchbot[%s] Unencrypted result: %s", self._device.address, plain_response)
