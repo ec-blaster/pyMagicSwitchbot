@@ -1,10 +1,10 @@
 """Library to handle connection with MagicSwitchbot."""
 
 """Connection constants"""
-DEFAULT_RETRY_COUNT = 1  # Max number of iterations to try when sending commands to the device
+DEFAULT_RETRY_COUNT = 3  # Max number of iterations to try when sending commands to the device
 DEFAULT_RETRY_TIMEOUT = 1  # Number of seconds between retries
 DEFAULT_SCAN_TIMEOUT = 5  # Max timeout when looking for devices
-NOTIFY_TIMEOUT = 15 # Max seconds to wait before the device sends back the response to a command
+NOTIFY_TIMEOUT = 5 # Max seconds to wait before the device sends back the response to a command
 DISCONNECT_DELAY = 49  # How long to hold the connection to wait for additional commands before disconnecting the device.
 
 """Constants definition for BLE communication"""    

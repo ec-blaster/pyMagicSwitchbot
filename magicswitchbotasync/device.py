@@ -67,17 +67,13 @@ class MagicSwitchbotDevice:
         self.loop = asyncio.get_event_loop()
         self._callbacks: list[Callable[[], None]] = []
         self._token = None
-
-    '''def _commandkey(self, key: str) -> str:
-        """Add password to key if set."""
-        if self._password_encoded is None:
-            return key
-        key_action = key[3]
-        key_suffix = key[4:]
-        return KEY_PASSWORD_PREFIX + key_action + self._password_encoded + key_suffix
-    '''
+        self._chip_type = None
+        self._ver_major = None
+        self._ver_minor = None
+        self._dev_type = None
+        self._en_pwd = False if password is None else True
       
-    async def _sendCommand(self, command: str, parameter: str, retries: int | None=None) -> bytes | None:
+    async def _sendCommand(self, command: str, parameter: str, retries: int | None=None) -> bool | None:
         """Sends a command to the device and waits for its response
         
         This method sends a command to the device via BLE, waiting and processing an execution response
@@ -93,36 +89,36 @@ class MagicSwitchbotDevice:
 
         Returns
         -------
-            bytes
-                Returns a response to the command
+            bool
+                Returns True if the command executed succesfully
         """
         if retries is None:
             retries = self._retry_count
         
-        _LOGGER.debug("%s: Sending command %s with parameter %s and %d retries", self.name, command, parameter, retries)
+        _LOGGER.debug("MagicSwitchbot[%s]: Sending command %s with parameter %s and %d retries", self._device.address, command, parameter, retries)
         
         '''First of all we check if there is a token to retrieve'''
         if command != CMD_GETTOKEN and self._token is None:
-            '''If the command is NOT GETTOKEN, we'll issue a GETOTKEN command before sending the actual command'''
-            _LOGGER.debug("The device hasn't got a token yet. Let's get one...")
+            '''If the command is NOT CMD_GETTOKEN, we'll issue a CMD_GETTOKEN before sending the actual command'''
+            _LOGGER.debug("MagicSwitchbot[%s]: The device hasn't got a token yet. Let's get one...")
             go = await self._auth()
         else:
-            _LOGGER.debug("We've got the token. Go on...")
+            _LOGGER.debug("MagicSwitchbot[%s]: We've got a token. Go on...", self._device.address)
             go = True
             
         if go:
           if self._operation_lock.locked():
               _LOGGER.debug(
-                  "%s: Operation already in progress, waiting for it to complete; RSSI: %s",
-                  self.name,
+                  "MagicSwitchbot[%s]: Operation already in progress, waiting for it to complete; RSSI: %s",
+                  self._device.address,
                   self.rssi,
               )
   
           max_attempts = retries
           if self._operation_lock.locked():
               _LOGGER.debug(
-                  "%s: Operation already in progress, waiting for it to complete; RSSI: %s",
-                  self.name,
+                  "MagicSwitchbot[%s]: Operation already in progress, waiting for it to complete; RSSI: %s",
+                  self._device.address,
                   self.rssi,
               )
           async with self._operation_lock:
@@ -133,7 +129,7 @@ class MagicSwitchbotDevice:
                       return await self._send_command_locked(encrypted_command)
                   except BleakNotFoundError:
                       _LOGGER.error(
-                          "%s: device not found, no longer in range, or poor RSSI: %s",
+                          "MagicSwitchbot[%s]: device not found, no longer in range, or poor RSSI: %s",
                           self.name,
                           self.rssi,
                           exc_info=True,
@@ -142,7 +138,7 @@ class MagicSwitchbotDevice:
                   except CharacteristicMissingError as ex:
                       if attempt == retries:
                           _LOGGER.error(
-                              "%s: characteristic missing: %s; Stopping trying; RSSI: %s",
+                              "MagicSwitchbot[%s]: characteristic missing: %s; Stopping trying; RSSI: %s",
                               self.name,
                               ex,
                               self.rssi,
@@ -151,7 +147,7 @@ class MagicSwitchbotDevice:
                           return None
   
                       _LOGGER.debug(
-                          "%s: characteristic missing: %s; RSSI: %s",
+                          "MagicSwitchbot[%s]: characteristic missing: %s; RSSI: %s",
                           self.name,
                           ex,
                           self.rssi,
@@ -160,7 +156,7 @@ class MagicSwitchbotDevice:
                   except BLEAK_EXCEPTIONS:
                       if attempt == retries:
                           _LOGGER.error(
-                              "%s: communication failed; Stopping trying; RSSI: %s",
+                              "MagicSwitchbot[%s]: communication failed; Stopping trying; RSSI: %s",
                               self.name,
                               self.rssi,
                               exc_info=True,
@@ -168,7 +164,7 @@ class MagicSwitchbotDevice:
                           return None
   
                       _LOGGER.debug(
-                          "%s: communication failed with:", self.name, exc_info=True
+                          "MagicSwitchbot[%s]: communication failed with:", self._device.address, exc_info=True
                       )
 
           raise RuntimeError("Unreachable")
@@ -187,7 +183,7 @@ class MagicSwitchbotDevice:
         """Ensure connection to the device is established."""
         if self._connect_lock.locked():
             _LOGGER.debug(
-                "%s: Connection already in progress, waiting for it to complete; RSSI: %s",
+                "MagicSwitchbot[%s]: Connection already in progress, waiting for it to complete; RSSI: %s",
                 self.name,
                 self.rssi,
             )
@@ -199,7 +195,7 @@ class MagicSwitchbotDevice:
             if self._client and self._client.is_connected:
                 self._reset_disconnect_timer()
                 return
-            _LOGGER.debug("%s: Connecting; RSSI: %s", self.name, self.rssi)
+            _LOGGER.debug("MagicSwitchbot[%s]: Connecting; RSSI: %s", self._device.address, self.rssi)
             client = await establish_connection(
                 BleakClientWithServiceCache,
                 self._device,
@@ -208,7 +204,7 @@ class MagicSwitchbotDevice:
                 cached_services=self._cached_services,
                 ble_device_callback=lambda: self._device,
             )
-            _LOGGER.debug("%s: Connected; RSSI: %s", self.name, self.rssi)
+            _LOGGER.debug("MagicSwitchbot[%s]: Connected; RSSI: %s", self._device.address, self.rssi)
             resolved = self._resolve_characteristics(client.services)
             if not resolved:
                 # Try to handle services failing to load
@@ -236,11 +232,11 @@ class MagicSwitchbotDevice:
         """Disconnected callback."""
         if self._expected_disconnect:
             _LOGGER.debug(
-                "%s: Disconnected from device; RSSI: %s", self.name, self.rssi
+                "MagicSwitchbot[%s]: Disconnected from device; RSSI: %s", self._device.address, self.rssi
             )
             return
         _LOGGER.warning(
-            "%s: Device unexpectedly disconnected; RSSI: %s",
+            "MagicSwitchbot[%s]: Device unexpectedly disconnected; RSSI: %s",
             self.name,
             self.rssi,
         )
@@ -253,7 +249,7 @@ class MagicSwitchbotDevice:
     async def _execute_timed_disconnect(self):
         """Execute timed disconnection."""
         _LOGGER.debug(
-            "%s: Disconnecting after timeout of %s",
+            "MagicSwitchbot[%s]: Disconnecting after timeout of %s",
             self.name,
             DISCONNECT_DELAY,
         )
@@ -270,7 +266,7 @@ class MagicSwitchbotDevice:
             if client and client.is_connected:
                 await client.disconnect()
 
-    async def _send_command_locked(self, command: bytes) -> bytes:
+    async def _send_command_locked(self, command: bytes) -> bool:
         """Sends an encrypted command to the device and reads the response."""
         await self._ensure_connected()
         try:
@@ -279,7 +275,7 @@ class MagicSwitchbotDevice:
             # Disconnect so we can reset state and try again
             await asyncio.sleep(0.25)
             _LOGGER.debug(
-                "%s: RSSI: %s; Backing off %ss; Disconnecting due to error: %s",
+                "MagicSwitchbot[%s]: RSSI: %s; Backing off %ss; Disconnecting due to error: %s",
                 self.name,
                 self.rssi,
                 0.25,
@@ -290,12 +286,12 @@ class MagicSwitchbotDevice:
         except BleakError as ex:
             # Disconnect so we can reset state and try again
             _LOGGER.debug(
-                "%s: RSSI: %s; Disconnecting due to error: %s", self.name, self.rssi, ex
+                "MagicSwitchbot[%s]: RSSI: %s; Disconnecting due to error: %s", self._device.address, self.rssi, ex
             )
             await self._execute_disconnect()
             raise
 
-    async def _execute_command_locked(self, command: bytes) -> bytes:
+    async def _execute_command_locked(self, command: bytes) -> bool:
         """Executes the command and reads the response."""
         assert self._client is not None
         if not self._read_char:
@@ -307,30 +303,29 @@ class MagicSwitchbotDevice:
 
         def _notification_handler(_sender: int, data: bytearray) -> None:
             """Internal routine to handle BLE notification responses."""
-            _LOGGER.info("%s: Notification received. Sender: %d, data: %s", self.name, _sender, data)
+            _LOGGER.info("MagicSwitchbot[%s]: Notification received. Sender: %d, data: %s", self._device.address, _sender, data)
             
-            if future.done():
-                _LOGGER.debug("%s: Notification handler already done", self.name)
-                return
-              
             if _sender == self._read_char.handle:
+              if future.done():
+                _LOGGER.debug("MagicSwitchbot[%s]: The notification was received after notifying being stopped", self._device.address)
+                return
               future.set_result(data)
             else:
-              _LOGGER.debug("%s: The notification was not from our device", self.name)
+              _LOGGER.debug("MagicSwitchbot[%s]: The notification was not from our device", self._device.address)
 
-        _LOGGER.debug("%s: Subscribe to notifications; RSSI: %s", self.name, self.rssi)
+        _LOGGER.debug("MagicSwitchbot[%s]: Subscribe to notifications; RSSI: %s", self._device.address, self.rssi)
         await client.start_notify(self._read_char, _notification_handler)
         
-        _LOGGER.debug("%s: Sending command: %s", self.name, command)
+        _LOGGER.debug("MagicSwitchbot[%s]: Sending command: %s", self._device.address, command)
         await client.write_gatt_char(self._write_char, binascii.a2b_hex(command), True)
 
-        _LOGGER.debug("%s: Waiting for notifications...", self.name)
+        _LOGGER.debug("MagicSwitchbot[%s]: Waiting for notifications...", self._device.address)
 
         async with async_timeout.timeout(NOTIFY_TIMEOUT):
             notify_msg = await future
-        _LOGGER.debug("%s: Notification received: %s", self.name, notify_msg)
+        _LOGGER.debug("MagicSwitchbot[%s]: Notification received: %s", self._device.address, notify_msg)
 
-        _LOGGER.debug("%s: UnSubscribe from notifications", self.name)
+        _LOGGER.debug("MagicSwitchbot[%s]: Unsubscribe from notifications", self._device.address)
         await client.stop_notify(self._read_char)
         
         '''This sleep is important. Otherwise, it will freeze on next start_notify'''
@@ -338,8 +333,7 @@ class MagicSwitchbotDevice:
         
         plain_response = self._decrypt(notify_msg.hex())
         _LOGGER.debug("MagicSwitchbot[%s] Unencrypted result: %s", self._device.address, plain_response)
-        resp_success = self._processResponse(plain_response)
-        return plain_response
+        return await self._processResponse(plain_response)
 
     def get_address(self) -> str:
         """Returns the address of the device."""
@@ -349,7 +343,7 @@ class MagicSwitchbotDevice:
         """Returns a value from the advertisement data."""
         if self._override_adv_data and key in self._override_adv_data:
             _LOGGER.debug(
-                "%s: Using override value for %s: %s",
+                "MagicSwitchbot[%s]: Using override value for %s: %s",
                 self.name,
                 key,
                 self._override_adv_data[key],
@@ -392,21 +386,9 @@ class MagicSwitchbotDevice:
 
         return self._sb_adv_data
 
-    '''async def _get_basic_info(self) -> bytes | None:
-        """Return basic info of device."""
-        _data = await self._send_command(
-            key=DEVICE_GET_BASIC_SETTINGS_KEY, retry=self._retry_count
-        )
-
-        if _data in (b"\x07", b"\x00"):
-            _LOGGER.error("Unsuccessful, please try again")
-            return None
-
-        return _data'''
-
     def _fire_callbacks(self) -> None:
         """Fire callbacks."""
-        _LOGGER.debug("%s: Fire callbacks", self.name)
+        _LOGGER.debug("MagicSwitchbot[%s]: Fire callbacks", self._device.address)
         for callback in self._callbacks:
             callback()
 
@@ -422,17 +404,6 @@ class MagicSwitchbotDevice:
 
     async def update(self) -> None:
         """Update state of device."""
-
-    def _check_command_result(
-        self, result: bytes | None, index: int, values: set[int]
-    ) -> bool:
-        """Check command result."""
-        if not result or len(result) - 1 < index:
-            result_hex = result.hex() if result else "None"
-            raise MagicSwitchbotOperationError(
-                f"{self.name}: Sending command failed (result={result_hex} index={index} expected={values} rssi={self.rssi})"
-            )
-        return result[index] in values
 
     def _set_advertisement_data(self, advertisement: MagicSwitchbotAdvertisement) -> None:
         """Set advertisement data."""
@@ -548,7 +519,7 @@ class MagicSwitchbotDevice:
 
         return self._encrypt(fullCommand)
 
-    def _processResponse(self, response) -> bool:
+    async def _processResponse(self, response) -> bool:
         """Process the response from the device
       
         This method processes the response that we receive from the device after
@@ -575,14 +546,20 @@ class MagicSwitchbotDevice:
         if command == CMD_GETTOKEN[0:2]:
             if ret_code == RC_TOKENOK:
                 token = param[0:8]
-                chip_type = param[8:10]
-                ver_major = int(param[10:12])
-                ver_minor = int(param[12:14])
-                dev_type = param[14:16]
-                en_pwd = "False" if param[16:18] == '00' else "True"
+                self._chip_type = param[8:10]
+                self._ver_major = int(param[10:12])
+                self._ver_minor = int(param[12:14])
+                self._dev_type = param[14:16]
+                self._en_pwd = "False" if param[16:18] == '00' else "True"
                 self._token = token 
                 _LOGGER.info("MagicSwitchbot[%s] The current connection token is %s", self._device.address, token)
-                _LOGGER.info("MagicSwitchbot[%s] Chip type: %s, Firmware version: %d.%d, Device type: %s, Password enabled: %s", self._device.address, chip_type, ver_major, ver_minor, dev_type, en_pwd)
+                _LOGGER.info("MagicSwitchbot[%s] Chip type: %s, Firmware version: %d.%d, Device type: %s, Password enabled: %s",
+                             self._device.address,
+                             self._chip_type,
+                             self._ver_major,
+                             self._ver_minor,
+                             self._dev_type,
+                             self._en_pwd)
                 success = True
             else:
                 _LOGGER.error("MagicSwitchbot[%s] Error retrieving token. Please check password", self._device.address)
@@ -595,6 +572,9 @@ class MagicSwitchbotDevice:
                 self._battery = None
         elif command == CMD_SWITCH[0:2]:
             if ret_code == RC_SWITCH and param == STA_OK:
+                # We get a little more for the mechanical arm to stop. Otherwise, the user could send
+                # another command when it is moving yet, so the program would freeze
+                await asyncio.sleep(2.25)
                 _LOGGER.info("MagicSwitchbot[%s] Switch state changed successfully", self._device.address)
                 success = True
             else:
