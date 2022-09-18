@@ -13,8 +13,17 @@ from typing import Any
 
 from .consts import *
 from .device import MagicSwitchbotDevice
+from .discovery import parse_advertisement_data
 
 _LOGGER = logging.getLogger(__name__)
+
+#__all__ = [
+#    "parse_advertisement_data",
+#    "GetMagicSwitchbotDevices",
+#    "MagicSwitchbotAdvertisement",
+#    "MagicSwitchbotDevice",
+#    "MagicSwitchbot"
+#]
 
 
 class MagicSwitchbot(MagicSwitchbotDevice):

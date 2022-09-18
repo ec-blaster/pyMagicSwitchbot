@@ -114,3 +114,45 @@ class GetMagicSwitchbotDevices:
             if adv.data.get("address") == address
         }
     '''
+
+
+"""Parses the data that the device advertises when scanning for it"""
+def parse_advertisement_data(
+    device: BLEDevice,
+    advertisement_data: AdvertisementData
+) -> MagicSwitchbotAdvertisement | None:
+    """Parse advertisement data."""
+    _services = list(advertisement_data.service_data.values())
+    _mgr_datas = list(advertisement_data.manufacturer_data.values())
+
+    if not _services:
+        return None
+    _service_data = _services[0]
+    if not _service_data:
+        return None
+    _mfr_data = _mgr_datas[0] if _mgr_datas else None
+    _model = chr(_service_data[0] & 0b01111111)
+
+    # Datos que se anuncian: 0502 + MAC + Batería 
+    data = {
+        "address": device.address,  # MacOS uses UUIDs
+        "rawAdvData": list(advertisement_data.service_data.values())[0],
+        "data": { "battery" : 50 },
+        "model": _model,
+        "isEncrypted": bool(_service_data[0] & 0b10000000),
+    }
+
+    '''type_data = SUPPORTED_TYPES.get(_model)
+    if type_data:
+        data.update(
+            {
+                "modelFriendlyName": type_data["modelFriendlyName"],
+                "modelName": type_data["modelName"],
+                "data": type_data["func"](_service_data, _mfr_data),
+            }
+        )'''
+
+    data["data"]["rssi"] = device.rssi
+
+    return MagicSwitchbotAdvertisement(device.address, data, device)
+  
