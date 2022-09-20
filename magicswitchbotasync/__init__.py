@@ -14,6 +14,7 @@ from typing import Any
 from .consts import *
 from .device import MagicSwitchbotDevice
 from .discovery import parse_advertisement_data
+from .models import MagicSwitchbotAdvertisement
 
 _LOGGER = logging.getLogger(__name__)
 
