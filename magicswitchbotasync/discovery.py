@@ -132,7 +132,7 @@ def parse_advertisement_data(
         - 1 byte for EnPSW (password enabled). 00 is for no password and 01 for password enabled"""
     _mgr_datas = list(advertisement_data.manufacturer_data.values())
     
-    if len(_mgr_datas) > 0:
+    if len(_mgr_datas) > 16:
       _data = _mgr_datas[0].hex()
       _LOGGER.debug("MagicSwitchbot data: %s", _data)
       _battery = int("0x" + _data[12:14], 16)
