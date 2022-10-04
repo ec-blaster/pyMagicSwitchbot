@@ -263,6 +263,7 @@ class MagicSwitchbotDevice:
             self._client = None
             self._read_char = None
             self._write_char = None
+            self._token = None
             if client and client.is_connected:
                 await client.disconnect()
 
