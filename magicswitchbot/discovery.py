@@ -11,7 +11,6 @@ from bleak.backends.scanner import AdvertisementData
 
 from .consts import DEFAULT_RETRY_COUNT, DEFAULT_RETRY_TIMEOUT, DEFAULT_SCAN_TIMEOUT
 from .models import MagicSwitchbotAdvertisement
-from crypt import _sr
 
 _LOGGER = logging.getLogger(__name__)
 CONNECT_LOCK = asyncio.Lock()

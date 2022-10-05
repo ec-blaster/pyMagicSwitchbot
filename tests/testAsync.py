@@ -11,7 +11,7 @@ IMPORTANT: hcitool and python is not allowed to access bluetooth stack unless th
 
 import sys
 sys.path.append("..")
-from magicswitchbotasync import MagicSwitchbot
+from magicswitchbot import MagicSwitchbot
 import logging, asyncio
 from bleak import BleakScanner, BleakClient
 from bleak.backends.device import BLEDevice
