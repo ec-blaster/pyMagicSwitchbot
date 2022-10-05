@@ -16,8 +16,6 @@ import logging, asyncio
 from bleak import BleakScanner, BleakClient
 from bleak.backends.device import BLEDevice
 
-logging.basicConfig(level=logging.DEBUG)
-
 MAC = "00:11:22:33:44:55"
 MAC = "fc:45:c3:75:c9:ae"
 PASSWORD = None
@@ -61,6 +59,7 @@ async def explore_device(device: BLEDevice) -> None:
 
 async def main():
   try:
+    logging.basicConfig(level=logging.INFO)
     print(f"Connecting to MagicSwitchbot device at {MAC}...")
     
     ble_device = await BleakScanner.find_device_by_address(MAC, timeout=20)

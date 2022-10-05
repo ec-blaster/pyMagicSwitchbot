@@ -1,3 +1,4 @@
 /build/
 /pyMagicSwitchbot.egg-info/
 /dist/
+**/__pycache__/
