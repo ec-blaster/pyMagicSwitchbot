@@ -5,7 +5,7 @@ This is a Python library that allows the integration of *Magic Switchbot* device
 
 ## Product description
 
-The [Magic Switchbot device](https://www.interear.com/smart-products/magic-bluetooth-switchbot.html) is apparently a clone of the *Switchbot* manufactured by the Chinese company *Shenzhen Interear Intelligent Technology Co., Ltd*.
+The [Magic Switchbot device](https://www.interear.com/smart-products/magic-bluetooth-switchbot.html) was apparently a clone of the *Switchbot* manufactured by the Chinese company *Shenzhen Interear Intelligent Technology Co., Ltd*. Nowadays, the device seems to be discontinued and cannot be bought at any place.
 
 <img src="img/render.jpg" alt="Rendered product image" style="zoom:50%;" />
 
@@ -32,19 +32,19 @@ The device has 2 different working modes:
 
 ## Device API and protocol
 
-The device uses a *propietary* BLE protocol that I documented based on information provided by the manufacturer and some reverse engineering of the bluetooth logs and the original [Android App](https://play.google.com/store/apps/details?id=com.runChina.moLiKaiGuan&hl=es&gl=US).
+The device uses a *propietary* BLE protocol that I documented based on information provided by the manufacturer and some reverse engineering of the bluetooth logs and the original [Android App](https://m.apkpure.com/es/magicswitchbot/com.runChina.moLiKaiGuan/download/17-APK). Unfortunately, the app is no longer present at Google Play.
 
 The documentation is published [here](doc/MagicSwitchBot_API.md).
 
 ## References
 
-The library is based on `bluepy`, so it does not work on Windows.
+The latest version of this library is based on `bleak`, so theoretically it should work on Linux, Windows or Mac, although I've only tested it on Linux.
 
 The code is strongly influenced by [pySwitchbot](https://github.com/Danielhiversen/pySwitchbot) library by [Daniel Hjelseth Høyer (Danielhiversen)](https://github.com/Danielhiversen). My original idea was to modify this library and make it work for both devices families, but the internal working mode is quite different and most of the code was going to be different, so I decided to start a new project but using some of his good techniques and code.
 
 ## Important Note
 
-IMPORTANT: hcitool and python are not allowed to access bluetooth stack in LInux unless the user is root.
+IMPORTANT: hcitool and python are not allowed to access bluetooth stack in Linux unless the user is root.
 To solve it (insecure), you must run these commands if you don' t have the privileges:          
 
 ```bash
@@ -54,7 +54,7 @@ sudo setcap 'cap_net_raw+ep' $(readlink -f $(which hcitool))
 ```
 ## Using the library
 
-You need Python 3.5 or newer to use the library, and it is published to PyPi. So to use it just fetch it:
+You need Python 3.10 or newer to use the library, and it is published to PyPi. So to use it just fetch it:
 
 ```bash
 pip install pymagicswitchbot
@@ -74,127 +74,137 @@ from magicswitchbot import MagicSwitchbot
 
 The library uses a main class called `MagicSwitchbot`. The constructor gets the device's MAC address as a parameter:
 
-`MagicSwitchbot(mac, retry_count=3, password=None, interface=0, connect_timeout=3)`
+`MagicSwitchbot(device, password=None, interface=0, scan_timeout=5, retry_count=3)`
 
 ##### Parameters:
-* `mac` : str (Required)
-  MAC address of the device
-  
-* `retry_count` : int (Optional)
-  Number of retries if the connection does not succeed. Default: 3 times.
+* `device` : BLEDevice (Required)
+  A bluetooth device discovered from the `bleak` library.
   
 * `password` : string (Optional)
   Password or PIN set on the device.
   
 * `interface` : int (Optional)
-  Order of the bluetooth client interface to use. It will be prefixed by 'hci'. Default: 0 (hci0)
+  Order of the bluetooth client interface to use. It will be prefixed by 'hci'. Default is 0 (hci0)
   
-* `connect_timeout` : int (Optional)
+* `scan_timeout` : int (Optional)
   
-  Timeout in seconds for every connection. Default: 3 seconds
+  Max timeout when looking for devices. Default: 5 seconds
+  
+* `retry_count` : int (Optional)
+  Number of retries if the connection does not succeed. Default: 3 times.
 
 ### Methods
 
 In addition to the constructor, the main class has the following public methods:
 
-* `connect(connect_timeout=3, disconnect_timeout=-1) ‑> NoneType`
-Connects to the device
-  
-  This method allows us to connect to the Magic Switchbot device.
-  
-  #### Parameters:
-  
-  * `connect_timeout`: int (Optional)
-  
-    Specifies the amount of time (in seconds) we'll be waiting for the bluetooth device to connect. If it doesn't connect on time, it returns False.
-  
-    This parameter is optional. If you don't specify a value, a 3 seconds timeout is assumed.
-  
-  * `disconnect_timeout` : int (Optional)
-    Specifies the amount of time (in seconds) that will be scheduled to automatically disconnect from the device. If it's not specified, the client does not disconnect until the object is disposed from memory.
-    
-    This parameter is optional. If you don't specify a value, a -1 is assumed (no automatic disconnect).
-  
-* `disconnect()`
-
-  Manual disconnect.
-  
-* `auth() ‑> bool`
-Validation of the password.
-  
-  This method allows us to validate the password we provided to the class constructor, and gets the current token that will be used internally on all subsequent method calls.
-  
-  Returns bool: Returns True if password is correct.
-  
-* `is_connected() ‑> bool`
-
-  Checks if the device is connected.
-
-  Returns bool: Returns True if the device is still connected
-  
-* `turn_on() ‑> bool`
+* `async turn_on() ‑> bool`
   Use the device to switch something on.
   
   Returns bool: Returns True if the command was sent succesfully.
   
-* `turn_off() ‑> bool`
+* `async turn_off() ‑> bool`
   Use the device to switch something off.
 
   Returns bool: Returns True if the command was sent succesfully.
   
-* `push() ‑> bool`
+* `async push() ‑> bool`
   Use the device just to push a button.
 
   Returns bool: Returns True if the command was sent succesfully.
   
-* `get_battery() ‑> int`
+* `async get_battery() ‑> int`
 
   Gets the device's battery level
 
   Returns int: Level of the device's battery, from 0 to 100
+* `async get_basic_info() ‑> dict`
+
+  Gets device's basic information
+
+  Returns a dictionary with the following items regarding the device:
+  
+  * `battery`: level of the device's battery.
+  * `firmware`: version of the device's firmware.
+  * `chip_type`
+  * `device_type`
+  * `password_enabled`: True if the device has a PIN number set, False otherwise
 
 ## Example code
 
 The following example shows how to use the library in your Python program:
 
 ```python
-# Test program (test.py)
-from magicswitchbot import MagicSwitchbot
-import time, logging
+# Test program (tests/testAsync.py)
+'''
+Testing MagicSwitchBot devices library
 
-logging.basicConfig(level=logging.DEBUG)
+IMPORTANT: hcitool and python is not allowed to access bluetooth stack unless the user is root
+          To solve it (unsecure):
+          
+            sudo apt-get install libcap2-bin
+            sudo setcap 'cap_net_raw,cap_net_admin+eip' $(readlink -f $(which python3))
+            sudo setcap 'cap_net_raw+ep' $(readlink -f $(which hcitool))
+'''
+
+import sys
+sys.path.append("..")
+from magicswitchbot import MagicSwitchbot
+import logging, asyncio
+from bleak import BleakScanner
 
 MAC = "00:11:22:33:44:55"
+PASSWORD = None
 
-device = MagicSwitchbot(mac=MAC, connect_timeout=10)
+async def main():
+  try:
+    logging.basicConfig(level=logging.INFO)
+    print(f"Connecting to MagicSwitchbot device at {MAC}...")
+    
+    ble_device = await BleakScanner.find_device_by_address(MAC, timeout=20)
+    
+    # await explore_device(ble_device)
+    
+    if not ble_device:
+      print(f"Couldn't find a BLE device with address {MAC}")
+    else:
+      device = MagicSwitchbot(ble_device)
+      
+      print ("Device information:")
+      print (await device.get_basic_info())
 
-res = device.get_battery()
-if res:
-    print(f"Connected to device {MAC} with {res}% of battery remaining")
-    time.sleep(1)
-    
-    print("Turning on...")
-    if device.turn_on():
-        print("Command executed successfully")
-    else:
-        print("Error sending command")
-    time.sleep(1)
-    
-    print("Turning off...")
-    if device.turn_off():
-        print("Command executed successfully")
-    else:
-        print("Error sending command")
-    time.sleep(1)
-    
-    print("Pushing...")
-    if device.push():
-        print("Command executed successfully")
-    else:
-        print("Error sending command")
-else:
-    print("Could't get battery status")
+      res = await device.get_battery()
+      if res:
+          print(f"Connected to MagicSwitchbot device at {MAC} with {res}% of battery remaining")      
 
+          print("Turning on...")
+          ok = await device.turn_on()
+          
+          if ok:
+              print("Command executed successfully")
+                      
+              print("Turning off...")
+              ok = await device.turn_off()
+              if ok:
+                  print("Command executed successfully")
+              
+                  print("Pushing...")
+                  if await device.push():
+                      print("Command executed successfully")
+                  else:
+                      print("Error sending command")
+              else:
+                  print("Error sending command")
+          else:
+              print("Error sending command")
+      
+  except Exception as e:
+    print(e)
+    
+  finally:
+    print("Testing finished")
+
+    
+asyncio.run(main())
 
 ```
 

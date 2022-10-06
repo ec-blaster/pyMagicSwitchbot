@@ -19,7 +19,22 @@ from bleak_retry_connector import (
 )
 
 from .models import MagicSwitchbotAdvertisement
-from .consts import *
+# from .consts import *
+from .consts import (DEFAULT_SCAN_TIMEOUT,
+    DEFAULT_RETRY_COUNT,
+    DISCONNECT_DELAY,
+    NOTIFY_TIMEOUT,
+    CRYPT_KEY,
+    COMMANDS,
+    CMD_GETTOKEN,
+    CMD_GETBAT,
+    CMD_SWITCH,
+    RC_TOKENOK,
+    RC_GETBAT,
+    RC_SWITCH,
+    STA_OK,
+    UUID_USERREAD_CHAR,
+    UUID_USERWRITE_CHAR)
 from .discovery import GetMagicSwitchbotDevices
 
 _LOGGER = logging.getLogger(__name__)
@@ -263,6 +278,7 @@ class MagicSwitchbotDevice:
             self._client = None
             self._read_char = None
             self._write_char = None
+            self._token = None
             if client and client.is_connected:
                 await client.disconnect()
 

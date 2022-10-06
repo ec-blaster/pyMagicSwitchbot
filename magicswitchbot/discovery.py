@@ -117,42 +117,39 @@ class GetMagicSwitchbotDevices:
 
 
 """Parses the data that the device advertises when scanning for it"""
+
+
 def parse_advertisement_data(
     device: BLEDevice,
     advertisement_data: AdvertisementData
 ) -> MagicSwitchbotAdvertisement | None:
     """Parse advertisement data."""
-    _services = list(advertisement_data.service_data.values())
+    """MagicSwitchbot advertises using only manufacturer data"""
+    """The data format is:
+        - 6 bytes for the device's MAC address
+        - 1 byte for the battery level (0-100 deccimal)
+        - 1 byte for EnPSW (password enabled). 00 is for no password and 01 for password enabled"""
     _mgr_datas = list(advertisement_data.manufacturer_data.values())
+    
+    if len(_mgr_datas) > 16:
+      _data = _mgr_datas[0].hex()
+      _LOGGER.debug("MagicSwitchbot data: %s", _data)
+      _battery = int("0x" + _data[12:14], 16)
+      _enPsw = int ("0x" + _data[14:16], 16)
+    else:
+      _data = ""
+      _battery = 0
+      _enPsw = 0
 
-    if not _services:
-        return None
-    _service_data = _services[0]
-    if not _service_data:
-        return None
-    _mfr_data = _mgr_datas[0] if _mgr_datas else None
-    _model = chr(_service_data[0] & 0b01111111)
-
-    # Datos que se anuncian: 0502 + MAC + Batería 
+    _LOGGER.debug("Parsing MagicSwitchbot advertising data. Battery level: %d. Password enabled: %d", _battery, _enPsw)
+    
     data = {
         "address": device.address,  # MacOS uses UUIDs
-        "rawAdvData": list(advertisement_data.service_data.values())[0],
-        "data": { "battery" : 50 },
-        "model": _model,
-        "isEncrypted": bool(_service_data[0] & 0b10000000),
+        "rawAdvData": _data,
+        "data": { "battery": _battery, "rssi": device.rssi },
+        "model": "MagicSwitchbot",
+        "isEncrypted": True if _enPsw == 1 else False
     }
-
-    type_data = SUPPORTED_TYPES.get(_model)
-    if type_data:
-        data.update(
-            {
-                "modelFriendlyName": type_data["modelFriendlyName"],
-                "modelName": type_data["modelName"],
-                "data": type_data["func"](_service_data, _mfr_data),
-            }
-        )
-
-    data["data"]["rssi"] = device.rssi
 
     return MagicSwitchbotAdvertisement(device.address, data, device)
   
