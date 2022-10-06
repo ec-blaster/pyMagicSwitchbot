@@ -13,49 +13,11 @@ import sys
 sys.path.append("..")
 from magicswitchbot import MagicSwitchbot
 import logging, asyncio
-from bleak import BleakScanner, BleakClient
-from bleak.backends.device import BLEDevice
+from bleak import BleakScanner
 
 MAC = "00:11:22:33:44:55"
 MAC = "fc:45:c3:75:c9:ae"
 PASSWORD = None
-
-
-async def explore_device(device: BLEDevice) -> None:
-  client = BleakClient(device)
-  try:
-    await client.connect()
-    for service in client.services:
-      print(f"[Service] {service}")
-      for char in service.characteristics:
-        if "read" in char.properties:
-          try:
-            value = bytes(await client.read_gatt_char(char.uuid))
-            print(
-                f"\t[Characteristic] {char} ({','.join(char.properties)}), Value: {value}"
-            )
-          except Exception as e:
-            print(
-                f"\t[Characteristic] {char} ({','.join(char.properties)}), Value: {e}"
-            )
-  
-        else:
-          value = None
-          print(
-              f"\t[Characteristic] {char} ({','.join(char.properties)}), Value: {value}"
-          )
-  
-        for descriptor in char.descriptors:
-          try:
-            value = bytes(
-                await client.read_gatt_descriptor(descriptor.handle)
-            )
-            print(f"\t\t[Descriptor] {descriptor}) | Value: {value}")
-          except Exception as e:
-            print(f"\t\t[Descriptor] {descriptor}) | Value: {e}")
-  except:
-    await client.disconnect()
-
 
 async def main():
   try:
