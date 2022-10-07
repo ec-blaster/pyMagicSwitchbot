@@ -337,11 +337,9 @@ class MagicSwitchbotDevice:
 
         def _notification_handler(_sender: int, data: bytearray) -> None:
             """Internal routine to handle BLE notification responses."""
-            _LOGGER.info("MagicSwitchbot[%s]: Notification received. Sender: %d, data: %s", self._device.address, _sender.handle, data)
-            #_LOGGER.info("MagicSwitchbot[%s]: Notification received. Sender: %d, data: %s", self._device.address, _sender, data)
+            _LOGGER.info("MagicSwitchbot[%s]: Notification received. Sender: %d, data: %s", self._device.address, _sender, data)
             
-            #if _sender == self._read_char.handle:
-            if _sender.handle == self._read_char.handle:
+            if _sender == self._read_char.handle:
               if future.done():
                 _LOGGER.debug("MagicSwitchbot[%s]: The notification was received after notifying being stopped", self._device.address)
                 return

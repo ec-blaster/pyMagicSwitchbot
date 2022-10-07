@@ -10,7 +10,7 @@ setup(
     name='pyMagicSwitchbot',
     packages=['magicswitchbot'],
     install_requires=['pycryptodome', "bleak", "bleak-retry-connector>=1.5.0"],
-    version='1.1.2',
+    version='1.1.3',
     description='Library to control Magic Switchbot devices',
     long_description=long_description,
     long_description_content_type="text/markdown",
