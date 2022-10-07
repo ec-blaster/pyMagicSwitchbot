@@ -26,8 +26,6 @@ async def main():
     
     ble_device = await BleakScanner.find_device_by_address(MAC, timeout=20)
     
-    # await explore_device(ble_device)
-    
     if not ble_device:
       print(f"Couldn't find a BLE device with address {MAC}")
     else:

@@ -12,11 +12,19 @@ from bleak.backends.device import BLEDevice
 from bleak.backends.service import BleakGATTCharacteristic, BleakGATTServiceCollection
 from bleak.exc import BleakDBusError
 from bleak_retry_connector import (
+    BleakClient,
+    BleakNotFoundError,
+    establish_connection,
+)
+
+''' We get this out of the way but prepare it for future releases (HA bleak dependencies issues)
+from bleak_retry_connector import (
     BleakClientWithServiceCache,
     BleakNotFoundError,
     ble_device_has_changed,
     establish_connection,
 )
+'''
 
 from .models import MagicSwitchbotAdvertisement
 # from .consts import *
@@ -73,7 +81,8 @@ class MagicSwitchbotDevice:
             self._password_encoded = ""
         else:
             self._password_encoded = self._passwordToHex(password)
-        self._client: BleakClientWithServiceCache | None = None
+        self._client: BleakClient | None = None
+        #self._client: BleakClientWithServiceCache | None = None
         self._cached_services: BleakGATTServiceCollection | None = None
         self._read_char: BleakGATTCharacteristic | None = None
         self._write_char: BleakGATTCharacteristic | None = None
@@ -212,13 +221,22 @@ class MagicSwitchbotDevice:
                 return
             _LOGGER.debug("MagicSwitchbot[%s]: Connecting; RSSI: %s", self._device.address, self.rssi)
             client = await establish_connection(
-                BleakClientWithServiceCache,
+                BleakClient,
+                self._device.address,
+                self._device,
+                max_attempts=3
+            )
+            
+            '''
+            client = await establish_connection(
+                BleakClient,
                 self._device,
                 self.name,
                 self._disconnected,
                 cached_services=self._cached_services,
                 ble_device_callback=lambda: self._device,
             )
+            '''
             _LOGGER.debug("MagicSwitchbot[%s]: Connected; RSSI: %s", self._device.address, self.rssi)
             resolved = self._resolve_characteristics(client.services)
             if not resolved:
@@ -243,7 +261,7 @@ class MagicSwitchbotDevice:
             DISCONNECT_DELAY, self._disconnect
         )
 
-    def _disconnected(self, client: BleakClientWithServiceCache) -> None:
+    def _disconnected(self, client: BleakClient) -> None:
         """Disconnected callback."""
         if self._expected_disconnect:
             _LOGGER.debug(
@@ -319,9 +337,11 @@ class MagicSwitchbotDevice:
 
         def _notification_handler(_sender: int, data: bytearray) -> None:
             """Internal routine to handle BLE notification responses."""
-            _LOGGER.info("MagicSwitchbot[%s]: Notification received. Sender: %d, data: %s", self._device.address, _sender, data)
+            _LOGGER.info("MagicSwitchbot[%s]: Notification received. Sender: %d, data: %s", self._device.address, _sender.handle, data)
+            #_LOGGER.info("MagicSwitchbot[%s]: Notification received. Sender: %d, data: %s", self._device.address, _sender, data)
             
-            if _sender == self._read_char.handle:
+            #if _sender == self._read_char.handle:
+            if _sender.handle == self._read_char.handle:
               if future.done():
                 _LOGGER.debug("MagicSwitchbot[%s]: The notification was received after notifying being stopped", self._device.address)
                 return
@@ -377,8 +397,9 @@ class MagicSwitchbotDevice:
         """Updates the device data from advertisement."""
         # Only accept advertisements if the data is not missing
         # if we already have an advertisement with data
-        if self._device and ble_device_has_changed(self._device, advertisement.device):
-            self._cached_services = None
+        #if self._device and ble_device_has_changed(self._device, advertisement.device):
+        #    self._cached_services = None
+        self._sb_adv_data = advertisement
         self._device = advertisement.device
 
     async def get_device_data(
