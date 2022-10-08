@@ -12,19 +12,11 @@ from bleak.backends.device import BLEDevice
 from bleak.backends.service import BleakGATTCharacteristic, BleakGATTServiceCollection
 from bleak.exc import BleakDBusError
 from bleak_retry_connector import (
-    BleakClient,
-    BleakNotFoundError,
-    establish_connection,
-)
-
-''' We get this out of the way but prepare it for future releases (HA bleak dependencies issues)
-from bleak_retry_connector import (
     BleakClientWithServiceCache,
     BleakNotFoundError,
     ble_device_has_changed,
     establish_connection,
 )
-'''
 
 from .models import MagicSwitchbotAdvertisement
 # from .consts import *
@@ -81,9 +73,7 @@ class MagicSwitchbotDevice:
             self._password_encoded = ""
         else:
             self._password_encoded = self._passwordToHex(password)
-        self._client: BleakClient | None = None
-        #self._client: BleakClientWithServiceCache | None = None
-        self._cached_services: BleakGATTServiceCollection | None = None
+        self._client: BleakClientWithServiceCache | None = None
         self._read_char: BleakGATTCharacteristic | None = None
         self._write_char: BleakGATTCharacteristic | None = None
         self._disconnect_timer: asyncio.TimerHandle | None = None
@@ -96,6 +86,7 @@ class MagicSwitchbotDevice:
         self._ver_minor = None
         self._dev_type = None
         self._en_pwd = False if password is None else True
+        self._notify_future: asyncio.Future[bytearray] | None = None
       
     async def _sendCommand(self, command: str, parameter: str, retries: int | None=None) -> bool | None:
         """Sends a command to the device and waits for its response
@@ -127,7 +118,8 @@ class MagicSwitchbotDevice:
             _LOGGER.debug("MagicSwitchbot[%s]: The device hasn't got a token yet. Let's get one...")
             go = await self._auth()
         else:
-            _LOGGER.debug("MagicSwitchbot[%s]: We've got a token. Go on...", self._device.address)
+            if self._token:
+              _LOGGER.debug("MagicSwitchbot[%s]: We've got a token. Go on...", self._device.address)
             go = True
             
         if go:
@@ -148,7 +140,7 @@ class MagicSwitchbotDevice:
           async with self._operation_lock:
               for attempt in range(max_attempts):
                   try:
-                      _LOGGER.debug("Attempt #%d:", attempt + 1)
+                      _LOGGER.debug("MagicSwitchbot[%s]: - Attempt #%d -", self._device.address, attempt + 1)
                       encrypted_command = self._prepareCommand(command, parameter)
                       return await self._send_command_locked(encrypted_command)
                   except BleakNotFoundError:
@@ -221,22 +213,13 @@ class MagicSwitchbotDevice:
                 return
             _LOGGER.debug("MagicSwitchbot[%s]: Connecting; RSSI: %s", self._device.address, self.rssi)
             client = await establish_connection(
-                BleakClient,
-                self._device.address,
-                self._device,
-                max_attempts=3
-            )
-            
-            '''
-            client = await establish_connection(
-                BleakClient,
+                BleakClientWithServiceCache,
                 self._device,
                 self.name,
                 self._disconnected,
-                cached_services=self._cached_services,
-                ble_device_callback=lambda: self._device,
+                use_services_cache=True,
+                ble_device_callback=lambda: self._device
             )
-            '''
             _LOGGER.debug("MagicSwitchbot[%s]: Connected; RSSI: %s", self._device.address, self.rssi)
             resolved = self._resolve_characteristics(client.services)
             if not resolved:
@@ -245,6 +228,7 @@ class MagicSwitchbotDevice:
             self._cached_services = client.services if resolved else None
             self._client = client
             self._reset_disconnect_timer()
+            await self._start_notify()
 
     def _resolve_characteristics(self, services: BleakGATTServiceCollection) -> bool:
         """Initialize characteristics handles to the device"""
@@ -261,7 +245,7 @@ class MagicSwitchbotDevice:
             DISCONNECT_DELAY, self._disconnect
         )
 
-    def _disconnected(self, client: BleakClient) -> None:
+    def _disconnected(self, client: BleakClientWithServiceCache) -> None:
         """Disconnected callback."""
         if self._expected_disconnect:
             _LOGGER.debug(
@@ -325,6 +309,20 @@ class MagicSwitchbotDevice:
             await self._execute_disconnect()
             raise
 
+    def _notification_handler(self, _sender: int, data: bytearray) -> None:
+        """Internal routine to handle BLE notification responses."""
+        _LOGGER.info("MagicSwitchbot[%s] Notification received. Data: %s", self._device.address, data)
+        
+        if self._notify_future and not self._notify_future.done():
+            self._notify_future.set_result(data)
+            return
+        _LOGGER.debug("MagicSwitchbot[%s]: The notification was not from our device", self._device.address)
+
+    async def _start_notify(self) -> None:
+        """Start notification."""
+        _LOGGER.debug("MagicSwitchbot[%s]: Subscribe to notifications; RSSI: %s", self._device.address, self.rssi)
+        await self._client.start_notify(self._read_char, self._notification_handler)
+        
     async def _execute_command_locked(self, command: bytes) -> bool:
         """Executes the command and reads the response."""
         assert self._client is not None
@@ -332,23 +330,8 @@ class MagicSwitchbotDevice:
             raise CharacteristicMissingError(UUID_USERREAD_CHAR)
         if not self._write_char:
             raise CharacteristicMissingError(UUID_USERWRITE_CHAR)
-        future: asyncio.Future[bytearray] = asyncio.Future()
+        self._notify_future = asyncio.Future()
         client = self._client
-
-        def _notification_handler(_sender: int, data: bytearray) -> None:
-            """Internal routine to handle BLE notification responses."""
-            _LOGGER.info("MagicSwitchbot[%s]: Notification received. Sender: %d, data: %s", self._device.address, _sender, data)
-            
-            if _sender == self._read_char.handle:
-              if future.done():
-                _LOGGER.debug("MagicSwitchbot[%s]: The notification was received after notifying being stopped", self._device.address)
-                return
-              future.set_result(data)
-            else:
-              _LOGGER.debug("MagicSwitchbot[%s]: The notification was not from our device", self._device.address)
-
-        _LOGGER.debug("MagicSwitchbot[%s]: Subscribe to notifications; RSSI: %s", self._device.address, self.rssi)
-        await client.start_notify(self._read_char, _notification_handler)
         
         _LOGGER.debug("MagicSwitchbot[%s]: Sending command: %s", self._device.address, command)
         await client.write_gatt_char(self._write_char, binascii.a2b_hex(command), True)
@@ -356,14 +339,12 @@ class MagicSwitchbotDevice:
         _LOGGER.debug("MagicSwitchbot[%s]: Waiting for notifications...", self._device.address)
 
         async with async_timeout.timeout(NOTIFY_TIMEOUT):
-            notify_msg = await future
+            notify_msg = await self._notify_future
         _LOGGER.debug("MagicSwitchbot[%s]: Notification received: %s", self._device.address, notify_msg)
+        self._notify_future = None
 
-        _LOGGER.debug("MagicSwitchbot[%s]: Unsubscribe from notifications", self._device.address)
-        await client.stop_notify(self._read_char)
-        
-        '''This sleep is important. Otherwise, it will freeze on next start_notify'''
-        await asyncio.sleep(0.25)
+#        '''This sleep is important. Otherwise, it will freeze on next start_notify'''
+#        await asyncio.sleep(0.25)
         
         plain_response = self._decrypt(notify_msg.hex())
         _LOGGER.debug("MagicSwitchbot[%s] Unencrypted result: %s", self._device.address, plain_response)
@@ -395,7 +376,7 @@ class MagicSwitchbotDevice:
         """Updates the device data from advertisement."""
         # Only accept advertisements if the data is not missing
         # if we already have an advertisement with data
-        #if self._device and ble_device_has_changed(self._device, advertisement.device):
+        # if self._device and ble_device_has_changed(self._device, advertisement.device):
         #    self._cached_services = None
         self._sb_adv_data = advertisement
         self._device = advertisement.device
